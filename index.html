@@ -18241,9 +18241,9 @@
       newCanvas.addEventListener('mousemove', handleMove);
       
       // Touch events for mobile
-      newCanvas.addEventListener('touchstart', handleStart);
+      newCanvas.addEventListener('touchstart', handleStart, { passive: true });
       newCanvas.addEventListener('touchend', handleEnd);
-      newCanvas.addEventListener('touchmove', handleMove);
+      newCanvas.addEventListener('touchmove', handleMove, { passive: false });
     }
     
     function clearSignaturePadById(canvasId) {
@@ -18307,12 +18307,12 @@
       newCanvas.addEventListener('mouseup', handleEnd);
       newCanvas.addEventListener('mouseleave', handleEnd);
       newCanvas.addEventListener('mousemove', handleMove);
-      newCanvas.addEventListener('touchstart', handleStart);
+      newCanvas.addEventListener('touchstart', handleStart, { passive: true });
       newCanvas.addEventListener('touchend', handleEnd);
-      newCanvas.addEventListener('touchmove', handleMove);
+      newCanvas.addEventListener('touchmove', handleMove, { passive: false });
     }
 
-    function clearOfficerSignature() {
+    function clearOfficerSignature(){
       if (officerSignaturePad.canvas && officerSignaturePad.ctx) {
         officerSignaturePad.ctx.fillStyle = '#ffffff';
         officerSignaturePad.ctx.fillRect(0, 0, officerSignaturePad.canvas.width, officerSignaturePad.canvas.height);
@@ -23491,8 +23491,8 @@
       canvas.addEventListener('mouseout', stopDrawing);
       
       // Touch events for mobile
-      canvas.addEventListener('touchstart', handleTouchStart);
-      canvas.addEventListener('touchmove', handleTouchMove);
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
       canvas.addEventListener('touchend', stopDrawing);
     }
     
@@ -24134,8 +24134,8 @@
       signatureCanvas.addEventListener('mouseup', stopDrawing);
       signatureCanvas.addEventListener('mouseleave', stopDrawing);
       
-      signatureCanvas.addEventListener('touchstart', startDrawing);
-      signatureCanvas.addEventListener('touchmove', draw);
+      signatureCanvas.addEventListener('touchstart', startDrawing, { passive: false });
+      signatureCanvas.addEventListener('touchmove', draw, { passive: false });
       signatureCanvas.addEventListener('touchend', stopDrawing);
     }
 
