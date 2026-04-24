@@ -32937,7 +32937,7 @@
       try {
         const result = await window.api.backup.create('manual');
         if (result?.success) {
-t i          toast('Backup created successfully');
+          toast('Backup created successfully');
           loadBackupsList();
         } else {
           toast('Failed to create backup', 'error');
