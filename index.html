@@ -11145,6 +11145,7 @@
       localStorage.removeItem(STORAGE_KEYS.session);
       authState.loggedIn = false;
       authState.user = null;
+      isDataLoaded = false;
       if (autoLogoutTimer) {
         clearTimeout(autoLogoutTimer);
         autoLogoutTimer = null;
@@ -11278,6 +11279,7 @@
     }
 
     async function startApp() {
+      if (isDataLoaded) return;
       try {
         showLoading('Loading data…');
         await loadSettings();
@@ -14167,6 +14169,7 @@
 
     // ===== DATA LOADING =====
     let _loadDataInProgress = false;
+    let isDataLoaded = false;
     async function loadData() {
       if (!authState.loggedIn) return;
       if (_loadDataInProgress) {
@@ -14174,6 +14177,7 @@
         return;
       }
       _loadDataInProgress = true;
+      isDataLoaded = false;
       try {
         console.log('[RENDER] loadData - fetching all data...');
         const [clients, loans, payments, collateral, auditLogs] = await Promise.all([
@@ -14207,6 +14211,7 @@
           setTimeout(() => { if (typeof refreshNotifications === 'function') refreshNotifications(); }, 300);
         });
         loadData._retried = false;
+        isDataLoaded = true;
       } catch (e) {
         console.error('loadData error:', e);
         const health = window.api.db?.health ? await window.api.db.health() : null;
@@ -27686,10 +27691,6 @@
         const result = await window.api.collateral.forfeit(id);
         if (result.success) {
           toast(`Collateral forfeited. Payment of ${fmtMoney(acceptedValue)} applied to loan.`, 'ok');
-          // Force complete data reload to update loan balances
-          await loadData();
-          // Small delay to ensure DB is updated
-          await new Promise(resolve => setTimeout(resolve, 100));
           await loadData();
           renderCollateral();
           renderLoans();
