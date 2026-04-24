@@ -1,34 +1,26 @@
 {
-  "name": "MIG",
+  "name": "mig-monorepo",
   "version": "2.0.1",
-  "description": "Professional Loan & Client Management System",
-  "main": "electron/main.js",
-  "homepage": "./",
+  "description": "M.I.G Loans Management – Monorepo root. Sub-projects: desktop/ (Electron) and saas/ (Express API).",
+  "private": true,
   "scripts": {
-    "start": "electron .",
-    "dev": "electron .",
-    "build": "electron-builder",
-    "build:win": "electron-builder --win --publish never",
-    "build:win-portable": "electron-builder --win portable --publish never",
-    "build:license-manager": "pkg scripts/license-manager-standalone.js --targets node18-win-x64 --output dist/MIGL-License-Manager.exe",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev:api": "NODE_ENV=development node src/server.js",
-    "start:api": "node src/server.js"
+    "start": "npm start --prefix desktop",
+    "dev": "npm run dev --prefix desktop",
+    "build": "npm run build --prefix desktop",
+    "build:win": "npm run build:win --prefix desktop",
+    "build:win-portable": "npm run build:win-portable --prefix desktop",
+    "start:api": "npm start --prefix saas",
+    "dev:api": "npm run dev --prefix saas",
+    "test": "echo \"No tests specified\" && exit 0"
   },
-  "keywords": [
-    "electron",
-    "loan",
-    "client",
-    "management",
-    "microfinance",
-    "desktop"
-  ],
+  "keywords": ["electron", "express", "loan", "management", "microfinance"],
   "author": "MIG Development",
   "license": "ISC",
   "type": "commonjs",
+  "note": "Monorepo root. node_modules here is shared by both sub-projects during development. For independent deployment, run npm install inside desktop/ or saas/ separately.",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "^24.6.4",
+    "electron": "^41.0.0",
+    "electron-builder": "^25.1.8",
     "pkg": "^5.8.1",
     "png-to-ico": "^3.0.1"
   },
@@ -39,83 +31,17 @@
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "electron-is-dev": "^2.0.0",
-    "electron-updater": "^6.1.1",
+    "electron-updater": "^6.6.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.3",
-    "jspdf": "^2.5.2",
+    "jspdf": "^4.2.1",
     "morgan": "^1.10.1",
     "pg": "^8.17.2",
     "sql.js": "^1.8.0",
     "uuid": "^13.0.0",
     "winston": "^3.19.0"
-  },
-  "build": {
-    "appId": "com.mig.loansmanagement",
-    "productName": "M.I.G Loans Management",
-    "asar": false,
-    "files": [
-      "electron/**/*",
-      "src/**/*",
-      "legacy/**/*",
-      "index.html",
-      "package.json",
-      "production-config.json",
-      "logo/**/*",
-      "data/**/*",
-      "node_modules/**/*"
-    ],
-    "directories": {
-      "buildResources": "logo",
-      "output": "dist"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "ia32"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "logo/icon.ico",
-      "publisherName": "MIG",
-      "verifyUpdateCodeSignature": false
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "M.I.G Loans Management",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
-      "deleteAppDataOnUninstall": false,
-      "perMachine": false,
-      "runAfterFinish": true,
-      "warningsAsErrors": false,
-      "installerIcon": "logo/icon.ico",
-      "uninstallerIcon": "logo/icon.ico",
-      "installerHeader": "logo/MIG-LOGO-LB.png",
-      "installerSidebar": "logo/MIG-LOGO-LB.png"
-    },
-    "portable": {
-      "artifactName": "${productName}-Portable-${version}.${ext}"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "migl",
-      "repo": "migl-app",
-      "releaseType": "release"
-    }
   }
 }

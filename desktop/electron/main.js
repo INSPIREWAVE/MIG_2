@@ -10,7 +10,7 @@ try {
   isDev = (process.env.NODE_ENV === 'development') || process.defaultApp || /[\\/]electron-prebuilt[\\/]/.test(process.execPath) || /[\\/]electron[\\/]/.test(process.execPath);
 }
 const db = require('../legacy/db');
-const config = require('../src/config');
+const config = require('../config');
 const BackupScheduler = require('../legacy/backup-scheduler');
 const MigrationManager = require('../legacy/migration-manager');
 const CollateralManager = require('../legacy/collateral-manager');

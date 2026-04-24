@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const config = require('../src/config');
+const config = require('../config');
 
 // Backup scheduler for automatic database backups
 class BackupScheduler {

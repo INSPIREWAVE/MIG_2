@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('./db');
-const config = require('../src/config');
+const config = require('../config');
 
 /**
  * Migration Manager
