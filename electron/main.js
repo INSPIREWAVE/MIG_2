@@ -506,7 +506,7 @@ function createSetupWindow() {
     icon: path.join(__dirname, 'logo/MIG-LOGO-LB.png'),
   });
 
-  setupWindow.loadFile(path.join(__dirname, 'index.html'));
+  setupWindow.loadFile(path.join(__dirname, '../index.html'));
   setupWindow.once('ready-to-show', () => {
     setupWindow.webContents.send('setup:show');
     setupWindow.show();
@@ -541,7 +541,7 @@ function createWindow() {
     ? 'http://localhost:3000'
     : `file://${path.join(__dirname, '../build/index.html')}`;
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, '../index.html'));
 
   // Open DevTools in development
   if (isDev) {
