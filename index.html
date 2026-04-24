@@ -1,4 +1,4 @@
-<!-- <!DOCTYPE html> -->
+<!DOCTYPE html>
 <html lang="en" data-theme="emerald">
 <head>
   <meta charset="UTF-8">
@@ -10943,26 +10943,6 @@
     }
     
     // UTILITY: Download CSV data as file (works in Electron)
-    function downloadCSV(csvContent, filename) {
-      try {
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        link.style.position = 'absolute';
-        link.style.left = '-9999px';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-        return true;
-      } catch (err) {
-        console.error('Download failed:', err);
-        return false;
-      }
-    }
     
     // SECURITY: Global error handler for renderer
     window.addEventListener('error', (event) => {
@@ -13801,17 +13781,6 @@
       toast('Image removed', 'info');
     }
 
-    async function selectCollateralDocument() {
-      try {
-        const result = await window.api.collateral.selectDocument();
-        if (result.success && result.path) {
-          selectedCollateralDocument = result.path;
-          const fileName = result.path.split(/[/\\]/).pop();
-          $('#document-preview').innerHTML = `<span style="color: #10b981;">📄 ${fileName}</span>`;
-          toast('Document selected', 'ok');
-        }
-      } catch (e) { toast('Failed to select document', 'error'); }
-    }
 
     // ===== LOAN ENGINE PREVIEW =====
     function updateLoanPreview() {
@@ -15789,18 +15758,6 @@
       updateSegmentCounts();
     }
     
-    function renderSparkline(containerId, data) {
-      const container = document.getElementById(containerId);
-      if (!container || !data || data.length === 0) return;
-      
-      const max = Math.max(...data, 1);
-      const bars = data.map(val => {
-        const height = Math.max(3, (val / max) * 24);
-        return `<div class="sparkline-bar" style="height: ${height}px;"></div>`;
-      }).join('');
-      
-      container.innerHTML = bars;
-    }
     
     function filterClientsByStatCard(type) {
       // Reset other filters first
@@ -17180,32 +17137,6 @@
     // ===== SAVE/DELETE/GENERATE FUNCTIONS =====
     // NOTE: Main saveClient function is defined later (supports both add and edit)
 
-    async function saveLoan(loanId) {
-      const data = {
-        id: loanId,
-        clientId: parseInt($('#form-client')?.value),
-        amount: parseFloat($('#form-amount')?.value),
-        interest: parseFloat($('#form-interest')?.value),
-        paidAmount: 0,
-        loanDate: $('#form-loan-date')?.value,
-        dueDate: $('#form-due-date')?.value,
-        status: 'active',
-        notes: $('#form-notes')?.value?.trim() || '',
-        collateral: $('#form-collateral')?.value?.trim() || '',
-        collateralApplicable: $('#form-collateral-applicable')?.checked ? 1 : 0
-      };
-      showCornerLoader('Saving loan...');
-      try {
-        await window.api.loans.save(data);
-        toast(loanId ? 'Loan updated' : 'Loan created');
-        closeModal();
-        await loadData();
-      } catch (e) {
-        toast('Failed: ' + e.message, 'error');
-      } finally {
-        hideCornerLoader();
-      }
-    }
 
     function editLoan(loanId) {
       const loan = state.loans.find(l => l.id === loanId);
@@ -17528,20 +17459,6 @@
       }
     }
 
-    async function deleteClient(clientId) {
-      if (!confirm('Delete this client and all their loans?')) return;
-      showCornerLoader('Deleting client...');
-      try {
-        await window.api.clients.delete(clientId);
-        toast('Client deleted');
-        closeModal();
-        await loadData();
-      } catch (e) {
-        toast('Failed: ' + e.message, 'error');
-      } finally {
-        hideCornerLoader();
-      }
-    }
 
     async function viewLoan(loanId) {
       try {
@@ -18307,13 +18224,6 @@
       newCanvas.addEventListener('touchmove', handleMove);
     }
 
-    function clearOfficerSignature() {
-      if (officerSignaturePad.canvas && officerSignaturePad.ctx) {
-        officerSignaturePad.ctx.fillStyle = '#ffffff';
-        officerSignaturePad.ctx.fillRect(0, 0, officerSignaturePad.canvas.width, officerSignaturePad.canvas.height);
-        officerSignaturePad.hasSignature = false;
-      }
-    }
 
     function getOfficerSignatureDataURL() {
       if (officerSignaturePad.canvas && officerSignaturePad.hasSignature) {
@@ -18563,11 +18473,6 @@
       generatePDFReport(`Signed Loan Agreement - ${client.name} - ${loan.loanNumber || 'Loan #' + loanId}`, content);
     }
 
-    function clearSignaturePad() {
-      const canvas = $('#signature-pad');
-      if (!canvas) return; const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
 
     async function saveSignature(loanId) {
       const canvas = $('#signature-pad');
@@ -18805,32 +18710,6 @@
       closeModal();
     }
 
-    function manualPenaltyModal() {
-      const loanOptions = state.loans.filter(l => Number(l.balance || 0) > 0)
-        .map(l => `<option value="${l.id}">Loan #${l.id}</option>`).join('');
-      const html = `
-        <h2>Add Manual Penalty</h2>
-        <div class="form-grid gap-16">
-          <div class="field">
-            <label>Loan</label>
-            <select id="penalty-loan">${loanOptions || '<option disabled>No active loans</option>'}</select>
-          </div>
-          <div class="field">
-            <label>Penalty Amount (K)</label>
-            <input id="penalty-amount" type="number" placeholder="0.00">
-          </div>
-          <div class="field">
-            <label>Reason</label>
-            <input id="penalty-reason" type="text" placeholder="e.g., Late payment, Documentation">
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 20px;">
-          <button class="btn btn-primary" onclick="savePenalty()">Add Penalty</button>
-          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          </div>
-      `;
-      showModal(html);
-    }
 
     async function savePenalty() {
       const data = {
@@ -18855,35 +18734,7 @@
       }
     }
 
-    async function applyAutoPenalties() {
-      showCornerLoader('Applying penalties...');
-      try {
-        const result = await window.api.penalties.applyAuto();
-        toast(`Applied ${result.applied} penalties`);
-        await loadData();
-      } catch (e) {
-        toast('Failed: ' + e.message, 'error');
-      } finally {
-        hideCornerLoader();
-      }
-    }
 
-    async function exportAuditLog() {
-      try {
-        const logs = await window.api.audit.get();
-        const csv = 'Timestamp,Action,Entity Type,Entity ID,Old Value,New Value\n' +
-          logs.map(l => `"${l.timestamp}","${l.action}","${l.entityType}","${l.entityId}","${l.oldValue || ''}","${l.newValue || ''}"`).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `audit-log-${Date.now()}.csv`;
-        a.click();
-        toast('Audit log exported');
-      } catch (e) {
-        toast('Failed: ' + e.message, 'error');
-      }
-    }
 
     // ===== LOANS =====
     function renderLoans() {
@@ -19669,12 +19520,6 @@
               <input type="number" id="restr-capitalize" value="0" min="0" step="0.01" placeholder="Amount of arrears to capitalize">
               <div style="font-size:11px;color:#6b7280;margin-top:4px;">Adds arrears/penalties to outstanding balance. New balance: <span id="restr-new-balance">${fmtMoney(balance)}</span></div>
             </div>
-            <script>
-              document.getElementById('restr-capitalize').addEventListener('input', function() {
-                const cap = parseFloat(this.value) || 0;
-                document.getElementById('restr-new-balance').textContent = 'K' + (${balance} + cap).toFixed(2);
-              });
-            <\/script>
           </div>
           <div class="restructure-section">
             <div class="restructure-section-title">📋 Restructure Reason</div>
@@ -19694,11 +19539,6 @@
               <label>Specify Reason</label>
               <input type="text" id="restr-reason-other" placeholder="Enter specific reason">
             </div>
-            <script>
-              document.getElementById('restr-reason').addEventListener('change', function() {
-                document.getElementById('restr-other-wrap').style.display = this.value === 'Other' ? '' : 'none';
-              });
-            <\/script>
           </div>
           <div style="display:flex;gap:8px;margin-top:4px;justify-content:flex-end;">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -19707,6 +19547,22 @@
         </div>
       `;
       showModal(html);
+      // Attach event listeners after modal HTML is injected (inline scripts do not execute via innerHTML)
+      const capitalizeInput = document.getElementById('restr-capitalize');
+      if (capitalizeInput) {
+        capitalizeInput.addEventListener('input', function() {
+          const cap = parseFloat(this.value) || 0;
+          const balanceDisplay = document.getElementById('restr-new-balance');
+          if (balanceDisplay) balanceDisplay.textContent = 'K ' + (balance + cap).toFixed(2);
+        });
+      }
+      const reasonSelect = document.getElementById('restr-reason');
+      if (reasonSelect) {
+        reasonSelect.addEventListener('change', function() {
+          const otherWrap = document.getElementById('restr-other-wrap');
+          if (otherWrap) otherWrap.style.display = this.value === 'Other' ? '' : 'none';
+        });
+      }
     }
 
     async function applyLoanRestructure(loanId) {
@@ -23351,18 +23207,6 @@
     }
     
     // Save signature settings
-    async function saveSignatureSettings() {
-      try {
-        const toSave = {
-          ...signatureSystem.settings,
-          savedSignature: signatureSystem.savedSignature
-        };
-        await window.api.settings.set('signatureSettings', JSON.stringify(toSave));
-        toast('Signature settings saved');
-      } catch (e) {
-        toast('Failed to save signature settings', 'error');
-      }
-    }
     
     // Show signature pad modal
     function showSignaturePadModal(callback) {
@@ -23464,32 +23308,6 @@
     }
     
     // Initialize signature canvas
-    function initSignatureCanvas() {
-      const canvas = document.getElementById('signature-canvas');
-      if (!canvas) return;
-      
-      signatureSystem.canvas = canvas;
-      signatureSystem.ctx = canvas.getContext('2d');
-      signatureSystem.ctx.strokeStyle = '#000000';
-      signatureSystem.ctx.lineWidth = 3;
-      signatureSystem.ctx.lineCap = 'round';
-      signatureSystem.ctx.lineJoin = 'round';
-      
-      // Fill white background
-      signatureSystem.ctx.fillStyle = '#ffffff';
-      signatureSystem.ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Drawing events
-      canvas.addEventListener('mousedown', startDrawing);
-      canvas.addEventListener('mousemove', draw);
-      canvas.addEventListener('mouseup', stopDrawing);
-      canvas.addEventListener('mouseout', stopDrawing);
-      
-      // Touch events for mobile
-      canvas.addEventListener('touchstart', handleTouchStart);
-      canvas.addEventListener('touchmove', handleTouchMove);
-      canvas.addEventListener('touchend', stopDrawing);
-    }
     
     function startDrawing(e) {
       signatureSystem.isDrawing = true;
@@ -23627,16 +23445,6 @@
     }
     
     // Update signature preview
-    function updateSignaturePreview(dataUrl) {
-      const previewBox = document.getElementById('sig-preview-box');
-      if (!previewBox) return;
-      
-      if (dataUrl) {
-        previewBox.innerHTML = '<img src="' + dataUrl + '" style="max-height:50px; max-width:100%;">';
-      } else {
-        previewBox.innerHTML = '<span style="color:#9ca3af; font-size:12px;">Signature will appear here</span>';
-      }
-    }
     
     // Get current signature data URL
     function getCurrentSignatureDataUrl() {
@@ -27332,40 +27140,7 @@
 
     // ===== COLLATERAL MANAGEMENT (Legacy - removed, using new IPC-based rendering) =====
 
-    function applyCollateralFilters() {
-      const clientId = $('#filter-collateral-client')?.value;
-      const type = $('#filter-collateral-type')?.value;
-      const status = $('#filter-collateral-status')?.value;
-      
-      const rows = document.querySelectorAll('#collateral-tbody tr');
-      let visibleCount = 0;
-      
-      rows.forEach(row => {
-        const rowClientId = row.getAttribute('data-client-id');
-        const rowType = row.getAttribute('data-type');
-        const rowStatus = row.getAttribute('data-status');
-        
-        let show = true;
-        if (clientId && rowClientId && rowClientId !== clientId) show = false;
-        if (type && rowType && rowType !== type) show = false;
-        if (status && rowStatus && rowStatus !== status) show = false;
-        
-        row.style.display = show ? '' : 'none';
-        if (show) visibleCount++;
-      });
-      
-      toast(`Showing ${visibleCount} collateral item(s)`, 'info');
-    }
 
-    function clearCollateralFilters() {
-      const clientFilter = $('#filter-collateral-client');
-      const statusFilter = $('#filter-collateral-status');
-      if (clientFilter) clientFilter.value = '';
-      if (statusFilter) statusFilter.value = '';
-      const rows = document.querySelectorAll('#collateral-tbody tr');
-      rows.forEach(row => row.style.display = '');
-      toast('Filters cleared', 'info');
-    }
 
     function openRegisterCollateralModal() {
       if (state.clients.length === 0) {
@@ -28787,44 +28562,6 @@
     }
 
     // ─── CLIENT PROFILE EXPORT ───────────────────────────────────────────────
-    function openClientProfileExport() {
-      const { clientId } = getReportFilters();
-      if (!clientId || clientId === 'all') {
-        toast('Please select a specific client from the filter bar first', 'warning');
-        return;
-      }
-      const client = state.clients.find(c => String(c.id) === String(clientId));
-      if (!client) { toast('Client not found', 'error'); return; }
-      const clientLoans = (state.loans || []).filter(l => String(l.clientId) === String(clientId));
-      const clientPayments = (state.payments || []).filter(p => clientLoans.some(l => l.id === p.loanId));
-      const clientCollateral = (state.collateral || []).filter(c => String(c.clientId) === String(clientId));
-      const totalBorrowed = clientLoans.reduce((s, l) => s + Number(l.amount || 0), 0);
-      const totalPaid = clientLoans.reduce((s, l) => s + Number(l.paidAmount || 0), 0);
-      const activeLoans = clientLoans.filter(l => Number(l.balance || 0) > 0);
-
-      const loanRows = clientLoans.map((l, i) => `<tr class="${i%2?'alt':''}"><td>${l.loanNumber||l.id}</td><td class="money">${fmtMoney(l.amount)}</td><td class="center">${l.interest||0}%</td><td class="center">${l.loanType||'—'}</td><td class="center">${l.loanDate||'—'}</td><td class="center">${l.dueDate||'—'}</td><td class="money">${fmtMoney(l.balance)}</td><td class="center"><span class="badge ${Number(l.balance||0)<=0?'badge-green':'badge-yellow'}">${Number(l.balance||0)<=0?'PAID':'ACTIVE'}</span></td></tr>`).join('');
-      const payRows = clientPayments.slice(-10).reverse().map((p, i) => `<tr class="${i%2?'alt':''}"><td class="center">${p.date||p.paymentDate||'—'}</td><td class="money">${fmtMoney(p.amount)}</td><td>${p.paymentMethod||'—'}</td><td>${p.reference||'—'}</td></tr>`).join('');
-
-      const body = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;">
-            <div style="font-size:10px;color:#64748b;text-transform:uppercase;margin-bottom:8px;">Client Details</div>
-            <div style="font-size:14px;font-weight:800;color:#0f172a;">${client.name}</div>
-            <div style="font-size:11px;color:#475569;margin-top:4px;">📞 ${client.phone||'—'}</div>
-            <div style="font-size:11px;color:#475569;">👤 NRC: ${client.nrc||'—'}</div>
-            <div style="font-size:11px;color:#475569;">📍 ${client.address||'—'}</div>
-          </div>
-          <div class="summary-row" style="margin:0;flex-direction:column;gap:8px;">
-            <div class="summ-box"><div class="summ-label">Total Borrowed</div><div class="summ-value">${fmtMoney(totalBorrowed)}</div></div>
-            <div class="summ-box"><div class="summ-label">Total Repaid</div><div class="summ-value" style="color:#10b981">${fmtMoney(totalPaid)}</div></div>
-          </div>
-        </div>
-        <h4 style="font-size:11px;font-weight:700;text-transform:uppercase;color:#475569;margin-bottom:6px;">Loan History (${clientLoans.length})</h4>
-        <table style="margin-bottom:14px"><thead><tr><th>Loan #</th><th class="money">Amount</th><th class="center">Rate</th><th class="center">Type</th><th class="center">Date</th><th class="center">Due</th><th class="money">Balance</th><th class="center">Status</th></tr></thead><tbody>${loanRows}</tbody></table>
-        <h4 style="font-size:11px;font-weight:700;text-transform:uppercase;color:#475569;margin-bottom:6px;">Recent Payments (last 10)</h4>
-        <table><thead><tr><th class="center">Date</th><th class="money">Amount</th><th>Method</th><th>Reference</th></tr></thead><tbody>${payRows||'<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:12px;">No payments on record</td></tr>'}</tbody></table>`;
-      _printReport(`Client Profile — ${client.name}`, body, false);
-    }
 
     function exportCollectionsSummary() {
       const { loans, format } = getReportFilters();
@@ -34324,167 +34061,6 @@ t i          toast('Backup created successfully');
     }
     
     // Print client profile
-    async function printClientProfile(clientId) {
-      const client = state.clients.find(c => c.id === clientId);
-      if (!client) return toast('Client not found', 'error');
-      
-      const clientLoans = state.loans.filter(l => String(l.clientId) === String(clientId));
-      const totalLoaned = clientLoans.reduce((s, l) => s + Number(l.amount || 0), 0);
-      const totalPaid = clientLoans.reduce((s, l) => s + Number(l.paidAmount || 0), 0);
-      const outstanding = clientLoans.reduce((s, l) => s + Number(l.balance || 0), 0);
-      
-      const initials = (client.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-      const riskLevel = client.riskLevel || 'medium';
-      const kycStatus = client.kycStatus || 'pending';
-      
-      const loanRows = clientLoans.map(l => `
-        <tr>
-          <td>${l.loanNumber || '#' + l.id}</td>
-          <td>${fmtMoney(l.amount)}</td>
-          <td>${l.loanDate || '—'}</td>
-          <td>${l.dueDate || '—'}</td>
-          <td>${fmtMoney(l.balance)}</td>
-          <td>${Number(l.balance || 0) > 0 ? 'Active' : 'Cleared'}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="6">No loans</td></tr>';
-      
-      const printWindow = window.open('', '_blank');
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Client Profile - ${client.name}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #1f2937; background: white; }
-            .header { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #10b981; }
-            .avatar { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 28px; color: white; background: #10b981; }
-            .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
-            .client-info h1 { font-size: 24px; color: #111827; margin-bottom: 4px; }
-            .client-info p { color: #6b7280; font-size: 14px; }
-            .badges { display: flex; gap: 8px; margin-top: 8px; }
-            .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-            .badge-low { background: #d1fae5; color: #065f46; }
-            .badge-medium { background: #fef3c7; color: #92400e; }
-            .badge-high { background: #fee2e2; color: #991b1b; }
-            .badge-verified { background: #d1fae5; color: #065f46; }
-            .badge-pending { background: #fef3c7; color: #92400e; }
-            .badge-rejected { background: #fee2e2; color: #991b1b; }
-            .section { margin-bottom: 24px; }
-            .section-title { font-size: 14px; font-weight: 600; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
-            .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-            .stat-card { background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center; border: 1px solid #e5e7eb; }
-            .stat-value { font-size: 24px; font-weight: 700; color: #111827; }
-            .stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; margin-top: 4px; }
-            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-            .detail-section { background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb; }
-            .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
-            .detail-row:last-child { border-bottom: none; }
-            .detail-label { color: #6b7280; font-size: 13px; }
-            .detail-value { color: #111827; font-size: 13px; font-weight: 500; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
-            th { background: #f9fafb; font-weight: 600; color: #374151; }
-            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 11px; }
-            .logo-section { text-align: center; margin-bottom: 20px; color: #10b981; font-weight: 700; font-size: 18px; }
-            @media print { body { padding: 20px; } }
-          </style>
-        </head>
-        <body>
-          <div class="logo-section">M.I.G Loans - Client Profile</div>
-          
-          <div class="header">
-            <div class="avatar">
-              ${client.profileImage ? `<img src="${client.profileImage}" alt="${client.name}">` : initials}
-            </div>
-            <div class="client-info">
-              <h1>${client.name}</h1>
-              <p>${client.clientNumber || 'N/A'} • Member since ${client.created_at ? new Date(client.created_at).toLocaleDateString() : 'N/A'}</p>
-              <div class="badges">
-                <span class="badge badge-${riskLevel}">${riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk</span>
-                <span class="badge badge-${kycStatus}">${kycStatus.charAt(0).toUpperCase() + kycStatus.slice(1)}</span>
-                ${client.creditScore ? `<span class="badge" style="background: #e5e7eb; color: #374151;">Score: ${client.creditScore}</span>` : ''}
-              </div>
-            </div>
-          </div>
-          
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-value">${clientLoans.length}</div>
-              <div class="stat-label">Total Loans</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" style="color: #10b981;">${fmtMoney(totalLoaned)}</div>
-              <div class="stat-label">Total Loaned</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" style="color: #0ea5e9;">${fmtMoney(totalPaid)}</div>
-              <div class="stat-label">Total Paid</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" style="color: ${outstanding > 0 ? '#ef4444' : '#10b981'};">${fmtMoney(outstanding)}</div>
-              <div class="stat-label">Outstanding</div>
-            </div>
-          </div>
-          
-          <div class="details-grid">
-            <div class="detail-section">
-              <div class="section-title">📋 Personal Details</div>
-              <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">${client.phone || 'N/A'}</span></div>
-              ${client.phone2 ? `<div class="detail-row"><span class="detail-label">Alt Phone</span><span class="detail-value">${client.phone2}</span></div>` : ''}
-              <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value">${client.email || 'N/A'}</span></div>
-              <div class="detail-row"><span class="detail-label">NRC/ID</span><span class="detail-value">${client.nrc || 'N/A'}</span></div>
-              ${client.gender ? `<div class="detail-row"><span class="detail-label">Gender</span><span class="detail-value">${client.gender}</span></div>` : ''}
-              ${client.dateOfBirth ? `<div class="detail-row"><span class="detail-label">Date of Birth</span><span class="detail-value">${client.dateOfBirth}</span></div>` : ''}
-              ${client.address ? `<div class="detail-row"><span class="detail-label">Address</span><span class="detail-value">${client.address}</span></div>` : ''}
-            </div>
-            
-            <div class="detail-section">
-              <div class="section-title">💼 Employment</div>
-              <div class="detail-row"><span class="detail-label">Occupation</span><span class="detail-value">${client.occupation || 'N/A'}</span></div>
-              <div class="detail-row"><span class="detail-label">Employer</span><span class="detail-value">${client.employer || 'N/A'}</span></div>
-              <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${client.employmentStatus || 'N/A'}</span></div>
-              ${client.monthlyIncome ? `<div class="detail-row"><span class="detail-label">Monthly Income</span><span class="detail-value" style="color: #10b981; font-weight: 600;">${fmtMoney(client.monthlyIncome)}</span></div>` : ''}
-              ${client.nokName ? `
-                <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-                  <div class="section-title" style="margin-bottom: 8px;">👥 Next of Kin</div>
-                  <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">${client.nokName}</span></div>
-                  <div class="detail-row"><span class="detail-label">Relation</span><span class="detail-value">${client.nokRelation || 'N/A'}</span></div>
-                  <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">${client.nokPhone || 'N/A'}</span></div>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-          
-          <div class="section" style="margin-top: 24px;">
-            <div class="section-title">💰 Loan History</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Loan #</th>
-                  <th>Amount</th>
-                  <th>Start Date</th>
-                  <th>Due Date</th>
-                  <th>Balance</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${loanRows}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="footer">
-            <p>Generated on ${new Date().toLocaleString()} • M.I.G Loans Management System</p>
-            <p style="margin-top: 4px;">This document is for internal use only and contains confidential information.</p>
-          </div>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-      setTimeout(() => { printWindow.print(); }, 500);
-    }
     
     // Toggle client blacklist status
     async function toggleClientBlacklist(clientId, addToBlacklist) {
@@ -38164,7 +37740,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
     function generatePaymentSchedule(loan) {
@@ -38248,7 +37824,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
       updateLoanCalc();
     }
     
@@ -38325,7 +37901,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
     function processEarlySettlement(loanId, amount) {
@@ -38392,7 +37968,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
     function printReceipt() {
@@ -38489,7 +38065,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
 
     // ===== COLLECTOR LEADERBOARD =====
@@ -38543,7 +38119,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
 
     // ===== LOAN TEMPLATES =====
@@ -38561,7 +38137,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         <h2 style="margin-bottom: 16px;">📋 Loan Templates</h2>
         <div class="loan-templates-grid">
           ${loanTemplates.map(t => `
-            <div class="loan-template-card" onclick="applyLoanTemplate(${t.id}, ${clientId || 'null'})">
+            <div class="loan-template-card" onclick="applyLoanTemplateById(${t.id}, ${clientId || 'null'})">
               <div class="loan-template-icon">${t.icon}</div>
               <div class="loan-template-name">${t.name}</div>
               <div class="loan-template-desc">${t.desc}</div>
@@ -38578,10 +38154,10 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
-    function applyLoanTemplate(templateId, clientId) {
+    function applyLoanTemplateById(templateId, clientId) {
       const template = loanTemplates.find(t => t.id === templateId);
       if (!template) return;
       closeModal();
@@ -38651,7 +38227,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
 
     // ===== CLIENT GROUPS =====
@@ -38687,7 +38263,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
     function createClientGroup() {
@@ -38772,7 +38348,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
 
     // ===== BIRTHDAY ALERTS =====
@@ -38825,7 +38401,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
     function sendBirthdayMessage(clientId) {
@@ -38903,7 +38479,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
     
     function showDayPayments(year, month, day) {
@@ -38943,7 +38519,7 @@ ${r.recentErrors.length > 0 ? r.recentErrors.join('\n') : 'None'}
         </div>
       `;
       
-      openModal(html);
+      showModal(html);
     }
 
     // ===== SHORTCUTS MODAL =====
