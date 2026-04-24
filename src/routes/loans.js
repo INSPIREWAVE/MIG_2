@@ -9,11 +9,11 @@ const { asyncHandler, notFoundError } = require('../middleware/error-handler');
 const loansService = require('../services/loans-service');
 
 /**
- * Create loan
+ * Create (originate) a loan
  * POST /api/loans
  */
 router.post('/', asyncHandler(async (req, res) => {
-  const loan = await loansService.createLoan(req.body, req.user.id);
+  const loan = await loansService.originateLoan(req.body, req.user.branch_id, req.user.id);
   
   res.status(201).json({
     success: true,
@@ -27,7 +27,7 @@ router.post('/', asyncHandler(async (req, res) => {
  * GET /api/loans/:loanId
  */
 router.get('/:loanId', asyncHandler(async (req, res) => {
-  const loan = await loansService.getLoan(req.params.loanId);
+  const loan = await loansService.getLoan(req.params.loanId, req.user.branch_id);
   
   if (!loan) {
     throw notFoundError('Loan');
@@ -45,18 +45,17 @@ router.get('/:loanId', asyncHandler(async (req, res) => {
  */
 router.get('/', asyncHandler(async (req, res) => {
   const {
-    clientId,
     status,
     limit = 50,
     offset = 0,
   } = req.query;
   
-  const loans = await loansService.listLoans({
-    clientId,
-    status,
-    limit: parseInt(limit),
-    offset: parseInt(offset),
-  });
+  const loans = await loansService.listLoans(
+    req.user.branch_id,
+    status || null,
+    parseInt(limit),
+    parseInt(offset),
+  );
   
   res.json({
     success: true,
@@ -70,13 +69,13 @@ router.get('/', asyncHandler(async (req, res) => {
  * POST /api/loans/:loanId/approve
  */
 router.post('/:loanId/approve', asyncHandler(async (req, res) => {
-  const { approvalDate, notes } = req.body;
+  const { notes } = req.body;
   
   const loan = await loansService.approveLoan(
     req.params.loanId,
-    approvalDate,
+    req.user.branch_id,
     req.user.id,
-    notes
+    notes,
   );
   
   res.json({
@@ -91,13 +90,13 @@ router.post('/:loanId/approve', asyncHandler(async (req, res) => {
  * POST /api/loans/:loanId/disburse
  */
 router.post('/:loanId/disburse', asyncHandler(async (req, res) => {
-  const { disbursementDate, method } = req.body;
+  const { amount } = req.body;
   
   const loan = await loansService.disburseLoan(
     req.params.loanId,
-    disbursementDate,
-    method,
-    req.user.id
+    amount,
+    req.user.branch_id,
+    req.user.id,
   );
   
   res.json({
@@ -115,7 +114,8 @@ router.put('/:loanId', asyncHandler(async (req, res) => {
   const updated = await loansService.updateLoan(
     req.params.loanId,
     req.body,
-    req.user.id
+    req.user.branch_id,
+    req.user.id,
   );
   
   res.json({

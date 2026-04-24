@@ -20,7 +20,7 @@ function authenticateToken(req, res, next) {
     });
   }
   
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'dev-access-secret-change-me', (err, user) => {
     if (err) {
       logger.warn(`JWT verification failed: ${err.message}`);
       
