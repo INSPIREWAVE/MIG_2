@@ -1,0 +1,175 @@
+{
+  "appName": "M.I.G Loans Management",
+  "version": "2.0.0-beta",
+  "environment": "production",
+  "buildDate": "2026-01-25",
+  "author": "MIG Development",
+  "website": "https://migl.app",
+  
+  "licensing": {
+    "enabled": true,
+    "requiresActivation": true,
+    "encryptionEnabled": false,
+    "offlineValidation": true,
+    "machineBinding": true,
+    "licenseServer": null,
+    "tiers": {
+      "starter": {
+        "name": "Starter",
+        "price": "$99",
+        "term": "annual",
+        "features": {
+          "maxClients": 50,
+          "maxLoans": 100,
+          "reports": ["basic"],
+          "exports": ["csv"],
+          "collateral": false,
+          "whitelabel": false,
+          "support": "email"
+        },
+        "licensePrefix": "MIG-STR"
+      },
+      "pro": {
+        "name": "Professional",
+        "price": "$199",
+        "term": "annual",
+        "features": {
+          "maxClients": 500,
+          "maxLoans": 2000,
+          "reports": ["basic", "advanced", "custom"],
+          "exports": ["csv", "pdf", "excel"],
+          "collateral": true,
+          "whitelabel": false,
+          "support": "email+chat"
+        },
+        "licensePrefix": "MIG-PRO"
+      },
+      "business": {
+        "name": "Business",
+        "price": "$399",
+        "term": "annual",
+        "features": {
+          "maxClients": "unlimited",
+          "maxLoans": "unlimited",
+          "reports": ["basic", "advanced", "custom", "api"],
+          "exports": ["csv", "pdf", "excel", "api"],
+          "collateral": true,
+          "whitelabel": true,
+          "support": "priority"
+        },
+        "licensePrefix": "MIG-BIZ"
+      },
+      "trial": {
+        "name": "Trial (30 days)",
+        "price": "Free",
+        "term": "trial",
+        "features": {
+          "maxClients": 10,
+          "maxLoans": 20,
+          "reports": ["basic"],
+          "exports": ["csv"],
+          "collateral": true,
+          "whitelabel": false,
+          "support": "community"
+        },
+        "licensePrefix": "MIG-TRIAL"
+      }
+    }
+  },
+  
+  "security": {
+    "passwordMinLength": 8,
+    "passwordRequireUppercase": true,
+    "passwordRequireNumbers": true,
+    "passwordRequireSpecialChars": true,
+    "sessionTimeoutMinutes": 30,
+    "maxLoginAttempts": 5,
+    "lockoutDurationMinutes": 15,
+    "enableAuditLog": true,
+    "enableErrorTelemetry": true,
+    "encryptionAlgorithm": "aes-256-cbc",
+    "backupRetentionDays": 30,
+    "backupMaxCount": 5
+  },
+  
+  "database": {
+    "type": "sql.js",
+    "atomicWrites": true,
+    "integrityCheckOnStartup": true,
+    "enableAutoBackup": true,
+    "backupIntervalMinutes": 60,
+    "compressionEnabled": false,
+    "migrationAuto": true
+  },
+  
+  "ui": {
+    "theme": "dark",
+    "accentColor": "#10b981",
+    "allowThemeCustomization": false,
+    "logoUrl": "./logo/MIG-LOGO-LB.png",
+    "appTitle": "M.I.G Loans Management"
+  },
+  
+  "features": {
+    "clients": true,
+    "loans": true,
+    "payments": true,
+    "penalties": true,
+    "collateral": true,
+    "documents": true,
+    "reports": true,
+    "audit": true,
+    "settings": true,
+    "exports": true,
+    "multiUser": false,
+    "apiServer": false,
+    "cloudSync": false,
+    "whitelabeling": false
+  },
+  
+  "deployment": {
+    "platform": "windows",
+    "minimumOs": "Windows 7 SP1",
+    "architecture": ["x64", "ia32"],
+    "bundleUpdate": true,
+    "updateCheckInterval": 86400,
+    "autoUpdateEnabled": false,
+    "codesignEnabled": false,
+    "codesignCertificate": null
+  },
+  
+  "integrations": {
+    "sentry": {
+      "enabled": false,
+      "dsn": null
+    },
+    "analytics": {
+      "enabled": false,
+      "endpoint": null
+    },
+    "updateServer": {
+      "enabled": false,
+      "endpoint": null,
+      "channel": "stable"
+    }
+  },
+  
+  "monetization": {
+    "salesEmail": "sales@migl.app",
+    "supportEmail": "support@migl.app",
+    "trialDays": 30,
+    "paymentGateway": "stripe",
+    "acceptCrypto": false,
+    "discountBulkPurchase": true,
+    "partnerProgram": true
+  },
+  
+  "defaultSettings": {
+    "companyName": "M.I.G",
+    "currency": "ZMK",
+    "timezone": "Africa/Lusaka",
+    "dailyPenaltyRate": 5,
+    "gracePeriodDays": 0,
+    "collateralAcceptedPercentage": 85
+  }
+}

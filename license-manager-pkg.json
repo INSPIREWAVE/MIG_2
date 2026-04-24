@@ -1,0 +1,16 @@
+{
+  "name": "migl-license-manager",
+  "version": "2.0.0",
+  "description": "MIGL License Manager - Standalone",
+  "main": "license-manager-standalone.js",
+  "bin": "license-manager-standalone.js",
+  "pkg": {
+    "scripts": [],
+    "assets": [],
+    "targets": ["node18-win-x64"],
+    "outputPath": "dist"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
