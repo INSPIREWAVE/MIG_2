@@ -106,9 +106,22 @@ async function getAuditLogs(filters = {}) {
 
     const result = await pool.query(query, params);
 
+    // Get accurate total count (separate query without LIMIT/OFFSET)
+    let countQuery = 'SELECT COUNT(*) AS total FROM audit_logs WHERE 1=1';
+    const countParams = [];
+    let countIndex = 1;
+    if (userId)     { countQuery += ` AND user_id = $${countIndex++}`;     countParams.push(userId); }
+    if (action)     { countQuery += ` AND action = $${countIndex++}`;      countParams.push(action); }
+    if (entityType) { countQuery += ` AND entity_type = $${countIndex++}`; countParams.push(entityType); }
+    if (entityId)   { countQuery += ` AND entity_id = $${countIndex++}`;   countParams.push(entityId); }
+    if (branchId)   { countQuery += ` AND branch_id = $${countIndex++}`;   countParams.push(branchId); }
+    if (startDate)  { countQuery += ` AND created_at >= $${countIndex++}`; countParams.push(new Date(startDate)); }
+    if (endDate)    { countQuery += ` AND created_at <= $${countIndex++}`; countParams.push(new Date(endDate)); }
+    const countResult = await pool.query(countQuery, countParams);
+
     return {
       logs: result.rows,
-      total: result.rowCount,
+      total: parseInt(countResult.rows[0].total, 10),
       limit,
       offset
     };

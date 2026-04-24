@@ -280,7 +280,12 @@ router.post('/logout', async (req, res) => {
     const token = authHeader && authHeader.split(' ')[1];
     if (token) {
       let tokenUser;
-      try { tokenUser = jwt.verify(token, JWT_SECRET); } catch (_) { /* expired is fine */ }
+      try { tokenUser = jwt.verify(token, JWT_SECRET); } catch (jwtErr) {
+        // Log non-expiry errors for security monitoring
+        if (jwtErr.name !== 'TokenExpiredError') {
+          console.warn('[AUTH] Token verification error on logout:', jwtErr.name);
+        }
+      }
       if (tokenUser && tokenUser.id) {
         await pool.query('UPDATE user_sessions SET is_active = false WHERE user_id = $1', [tokenUser.id]);
       }

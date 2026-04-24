@@ -45,9 +45,11 @@ const PORT = parseInt(process.env.PORT || '4000', 10);
 // Security headers
 app.use(helmet());
 
-// CORS
+// CORS — default to same-origin in production; override with CORS_ORIGIN env var.
+// Set CORS_ORIGIN='*' explicitly if you need to allow all origins (e.g. local dev).
+const corsOrigin = process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? false : '*');
 app.use(cors({
-  origin:         process.env.CORS_ORIGIN || '*',
+  origin:         corsOrigin,
   methods:        ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials:    true,
