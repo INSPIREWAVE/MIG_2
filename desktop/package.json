@@ -1,0 +1,101 @@
+{
+  "name": "mig-desktop",
+  "version": "2.0.1",
+  "description": "M.I.G Loans Management – Electron Desktop Application",
+  "main": "electron/main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win --publish never",
+    "build:win-portable": "electron-builder --win portable --publish never",
+    "build:license-manager": "pkg scripts/license-manager-standalone.js --targets node18-win-x64 --output dist/MIGL-License-Manager.exe",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["electron", "loan", "client", "management", "microfinance", "desktop"],
+  "author": "MIG Development",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^41.0.0",
+    "electron-builder": "^25.1.8",
+    "pkg": "^5.8.1",
+    "png-to-ico": "^3.0.1"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "chart.js": "^3.9.1",
+    "electron-is-dev": "^2.0.0",
+    "electron-updater": "^6.6.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "sql.js": "^1.8.0",
+    "uuid": "^13.0.0"
+  },
+  "build": {
+    "appId": "com.mig.loansmanagement",
+    "productName": "M.I.G Loans Management",
+    "asar": false,
+    "files": [
+      "electron/**/*",
+      "legacy/**/*",
+      "config/**/*",
+      "scripts/**/*",
+      "index.html",
+      "package.json",
+      "production-config.json",
+      "logo/**/*",
+      "data/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "logo",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "logo/icon.ico",
+      "publisherName": "MIG",
+      "verifyUpdateCodeSignature": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "M.I.G Loans Management",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "warningsAsErrors": false,
+      "installerIcon": "logo/icon.ico",
+      "uninstallerIcon": "logo/icon.ico",
+      "installerHeader": "logo/MIG-LOGO-LB.png",
+      "installerSidebar": "logo/MIG-LOGO-LB.png"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "migl",
+      "repo": "migl-app",
+      "releaseType": "release"
+    }
+  }
+}

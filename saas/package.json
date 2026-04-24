@@ -1,0 +1,32 @@
+{
+  "name": "mig-saas",
+  "version": "3.0.0",
+  "description": "M.I.G Loans Management – SaaS API Backend (Express + PostgreSQL)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": ["express", "api", "loan", "management", "microfinance", "postgresql"],
+  "author": "MIG Development",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "pg": "^8.17.2",
+    "uuid": "^13.0.0",
+    "winston": "^3.19.0"
+  }
+}
