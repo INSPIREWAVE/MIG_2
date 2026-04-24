@@ -2,7 +2,7 @@
   "name": "MIG",
   "version": "2.0.1",
   "description": "Professional Loan & Client Management System",
-  "main": "main.js",
+  "main": "electron/main.js",
   "homepage": "./",
   "scripts": {
     "start": "electron .",
@@ -10,7 +10,7 @@
     "build": "electron-builder",
     "build:win": "electron-builder --win --publish never",
     "build:win-portable": "electron-builder --win portable --publish never",
-    "build:license-manager": "pkg license-manager-standalone.js --targets node18-win-x64 --output dist/MIGL-License-Manager.exe",
+    "build:license-manager": "pkg scripts/license-manager-standalone.js --targets node18-win-x64 --output dist/MIGL-License-Manager.exe",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -55,21 +55,13 @@
     "productName": "M.I.G Loans Management",
     "asar": false,
     "files": [
-      "main.js",
-      "preload.js",
+      "electron/**/*",
+      "src/**/*",
+      "legacy/**/*",
       "index.html",
-      "updater.js",
       "package.json",
-      "config.js",
-      "backup-scheduler.js",
-      "migration-manager.js",
-      "collateral-manager.js",
-      "logger.js",
-      "error-handler.js",
-      "validation.js",
-      "logo/**/*",
-      "db.js",
       "production-config.json",
+      "logo/**/*",
       "data/**/*",
       "node_modules/**/*"
     ],
