@@ -5,7 +5,7 @@
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { pool } = require('../v3-server');
+const { pool } = require('../db-v3');
 
 const router = express.Router();
 
@@ -36,6 +36,19 @@ router.get('/', async (req, res) => {
     res.json({ success: true, users: result.rows });
   } catch (error) {
     console.error('Fetch users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========================================
+// Get roles
+// ========================================
+router.get('/config/roles', async (req, res) => {
+  try {
+    const query = 'SELECT id, name, description FROM roles ORDER BY tier_level DESC';
+    const result = await pool.query(query);
+    res.json({ success: true, roles: result.rows });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -169,19 +182,6 @@ router.put('/:id/status', async (req, res) => {
     const result = await pool.query(query, [is_active, id]);
 
     res.json({ success: true, user: result.rows[0] });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========================================
-// Get roles
-// ========================================
-router.get('/config/roles', async (req, res) => {
-  try {
-    const query = 'SELECT id, name, description FROM roles ORDER BY tier_level DESC';
-    const result = await pool.query(query);
-    res.json({ success: true, roles: result.rows });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -38,28 +38,6 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 /**
- * Get payment by ID
- * GET /api/payments/:paymentId
- */
-router.get('/:paymentId', asyncHandler(async (req, res) => {
-  const payment = await paymentService.getPayment(req.params.paymentId, req.user.branch_id);
-  
-  if (!payment) {
-    return res.status(404).json({
-      error: {
-        code: 404,
-        message: 'Payment not found',
-      },
-    });
-  }
-  
-  res.json({
-    success: true,
-    payment,
-  });
-}));
-
-/**
  * List payments for a loan
  * GET /api/payments/loan/:loanId
  */
@@ -90,6 +68,28 @@ router.get('/balance/:loanId', asyncHandler(async (req, res) => {
   res.json({
     success: true,
     balance,
+  });
+}));
+
+/**
+ * Get payment by ID
+ * GET /api/payments/:paymentId
+ */
+router.get('/:paymentId', asyncHandler(async (req, res) => {
+  const payment = await paymentService.getPayment(req.params.paymentId, req.user.branch_id);
+  
+  if (!payment) {
+    return res.status(404).json({
+      error: {
+        code: 404,
+        message: 'Payment not found',
+      },
+    });
+  }
+  
+  res.json({
+    success: true,
+    payment,
   });
 }));
 

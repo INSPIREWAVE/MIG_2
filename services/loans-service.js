@@ -107,7 +107,7 @@ async function originateLoan(data, branchId, userId) {
  */
 async function getLoan(loanId, branchId) {
   const result = await db.query(
-    `SELECT l.*, c.name as client_name, c.client_number
+    `SELECT l.*, c.first_name || ' ' || c.last_name AS client_name, c.client_number
      FROM loans l
      LEFT JOIN clients c ON l.client_id = c.id
      WHERE l.id = $1 AND l.branch_id = $2`,
@@ -258,7 +258,7 @@ async function disburseLoan(loanId, disbursedAmount, branchId, userId) {
  */
 async function listLoans(branchId, status = null, limit = 50, offset = 0) {
   let query = `SELECT l.id, l.loan_number, l.amount, l.interest_rate, l.status, 
-               l.created_at, c.name as client_name, c.client_number
+               l.created_at, c.first_name || ' ' || c.last_name AS client_name, c.client_number
                FROM loans l
                LEFT JOIN clients c ON l.client_id = c.id
                WHERE l.branch_id = $1`;
@@ -276,6 +276,56 @@ async function listLoans(branchId, status = null, limit = 50, offset = 0) {
   const result = await db.query(query, params);
   
   return result.rows;
+}
+
+/**
+ * Update loan metadata (non-status fields)
+ */
+async function updateLoan(loanId, data, branchId, userId) {
+  try {
+    const loan = await getLoan(loanId, branchId);
+    if (!loan) {
+      throw notFoundError('Loan');
+    }
+
+    return await db.transaction(async (client) => {
+      const updates = [];
+      const params = [loanId, branchId];
+      let paramCount = 2;
+
+      const allowedFields = ['interest_rate', 'duration_months', 'purpose', 'collateral_value', 'grace_period_days', 'daily_penalty_rate'];
+      for (const field of allowedFields) {
+        if (data[field] !== undefined) {
+          updates.push(`${field} = $${++paramCount}`);
+          params.push(data[field]);
+        }
+      }
+
+      if (updates.length === 0) {
+        return loan;
+      }
+
+      updates.push(`updated_at = NOW()`);
+
+      const result = await client.query(
+        `UPDATE loans SET ${updates.join(', ')} WHERE id = $1 AND branch_id = $2 RETURNING *`,
+        params
+      );
+
+      await client.query(
+        `INSERT INTO audit_logs (branch_id, user_id, action, entity_type, entity_id, details)
+         VALUES ($1, $2, 'LOAN_UPDATED', 'loan', $3, $4)`,
+        [branchId, userId, loanId, JSON.stringify({ changes: data })]
+      );
+
+      logger.info('Loan updated', { loanID: loanId });
+
+      return result.rows[0];
+    });
+  } catch (error) {
+    logger.error('Loan update failed', { error: error.message });
+    throw error;
+  }
 }
 
 /**
@@ -307,5 +357,6 @@ module.exports = {
   approveLoan,
   disburseLoan,
   listLoans,
+  updateLoan,
   getLoanStats,
 };

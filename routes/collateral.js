@@ -23,6 +23,20 @@ router.post('/', asyncHandler(async (req, res) => {
 }));
 
 /**
+ * List collateral for loan
+ * GET /api/collateral/loan/:loanId
+ */
+router.get('/loan/:loanId', asyncHandler(async (req, res) => {
+  const collaterals = await collateralService.listByLoan(req.params.loanId);
+  
+  res.json({
+    success: true,
+    collaterals,
+    count: collaterals.length,
+  });
+}));
+
+/**
  * Get collateral by ID
  * GET /api/collateral/:collateralId
  */
@@ -36,20 +50,6 @@ router.get('/:collateralId', asyncHandler(async (req, res) => {
   res.json({
     success: true,
     collateral,
-  });
-}));
-
-/**
- * List collateral for loan
- * GET /api/collateral/loan/:loanId
- */
-router.get('/loan/:loanId', asyncHandler(async (req, res) => {
-  const collaterals = await collateralService.listByLoan(req.params.loanId);
-  
-  res.json({
-    success: true,
-    collaterals,
-    count: collaterals.length,
   });
 }));
 

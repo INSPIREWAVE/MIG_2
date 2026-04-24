@@ -6,11 +6,12 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { pool } = require('../v3-server');
+const { pool } = require('../db-v3');
 
 const router = express.Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
-const JWT_EXPIRES_IN = '24h';
+const JWT_SECRET         = process.env.JWT_SECRET         || 'dev-access-secret-change-me';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-me';
+const JWT_EXPIRES_IN     = '24h';
 const REFRESH_EXPIRES_IN = '7d';
 
 // ========================================
@@ -69,7 +70,7 @@ router.post('/login', async (req, res) => {
     // Fetch user with role & permissions
     const userQuery = `
       SELECT u.id, u.username, u.email, u.password_hash, u.full_name, 
-             u.branch_id, u.is_active, r.name as role_name
+             u.branch_id, u.is_active, r.name as role_name, r.tier_level
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       WHERE u.username = $1 OR u.email = $1
@@ -104,21 +105,23 @@ router.post('/login', async (req, res) => {
     const permissions = permResult.rows.map(r => r.name);
 
     // Generate tokens
+    // Use consistent keys: id, branch_id, role, role_level — matches middleware/auth.js expectations
     const accessToken = jwt.sign(
       {
-        userId: user.id,
-        username: user.username,
-        branchId: user.branch_id,
-        role: user.role_name,
-        permissions
+        id:         user.id,
+        username:   user.username,
+        branch_id:  user.branch_id,
+        role:       user.role_name,
+        role_level: user.tier_level || 1,
+        permissions,
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
 
     const refreshToken = jwt.sign(
-      { userId: user.id },
-      JWT_SECRET,
+      { id: user.id },
+      JWT_REFRESH_SECRET,
       { expiresIn: REFRESH_EXPIRES_IN }
     );
 
@@ -158,7 +161,7 @@ router.post('/login', async (req, res) => {
 // ========================================
 // Refresh Token
 // ========================================
-router.post('/refresh', (req, res) => {
+router.post('/refresh', async (req, res) => {
   try {
     const { refreshToken } = req.body;
 
@@ -166,25 +169,51 @@ router.post('/refresh', (req, res) => {
       return res.status(400).json({ error: 'Refresh token required' });
     }
 
-    jwt.verify(refreshToken, JWT_SECRET, (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ error: 'Invalid refresh token' });
-      }
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    } catch (err) {
+      return res.status(403).json({ error: 'Invalid refresh token' });
+    }
 
-      const newAccessToken = jwt.sign(
-        {
-          userId: decoded.userId,
-          // Add more payload as needed from DB query
-        },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
-      );
+    // Re-fetch user so access token always contains up-to-date role/branch
+    const userQuery = `
+      SELECT u.id, u.username, u.email, u.full_name,
+             u.branch_id, u.is_active, r.name as role_name, r.tier_level
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      WHERE u.id = $1
+    `;
+    const userResult = await pool.query(userQuery, [decoded.id]);
 
-      res.json({
-        success: true,
-        accessToken: newAccessToken
-      });
-    });
+    if (userResult.rows.length === 0 || !userResult.rows[0].is_active) {
+      return res.status(403).json({ error: 'User not found or inactive' });
+    }
+
+    const user = userResult.rows[0];
+
+    const permQuery = `
+      SELECT p.name FROM permissions p
+      JOIN role_permissions rp ON p.id = rp.permission_id
+      WHERE rp.role_id = (SELECT id FROM roles WHERE name = $1)
+    `;
+    const permResult = await pool.query(permQuery, [user.role_name]);
+    const permissions = permResult.rows.map(r => r.name);
+
+    const newAccessToken = jwt.sign(
+      {
+        id:         user.id,
+        username:   user.username,
+        branch_id:  user.branch_id,
+        role:       user.role_name,
+        role_level: user.tier_level || 1,
+        permissions,
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({ success: true, accessToken: newAccessToken });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -195,10 +224,23 @@ router.post('/refresh', (req, res) => {
 // ========================================
 router.post('/change-password', async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-    const userId = req.user?.userId;
+    // Inline token verification since /api/auth is public
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+    let tokenUser;
+    try {
+      tokenUser = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
 
-    if (!userId || !currentPassword || !newPassword) {
+    const { currentPassword, newPassword } = req.body;
+    const userId = tokenUser.id;
+
+    if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -234,9 +276,14 @@ router.post('/change-password', async (req, res) => {
 // ========================================
 router.post('/logout', async (req, res) => {
   try {
-    const userId = req.user?.userId;
-    if (userId) {
-      await pool.query('UPDATE user_sessions SET is_active = false WHERE user_id = $1', [userId]);
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+      let tokenUser;
+      try { tokenUser = jwt.verify(token, JWT_SECRET); } catch (_) { /* expired is fine */ }
+      if (tokenUser && tokenUser.id) {
+        await pool.query('UPDATE user_sessions SET is_active = false WHERE user_id = $1', [tokenUser.id]);
+      }
     }
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {

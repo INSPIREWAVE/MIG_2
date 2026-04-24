@@ -11,7 +11,9 @@
     "build:win": "electron-builder --win --publish never",
     "build:win-portable": "electron-builder --win portable --publish never",
     "build:license-manager": "pkg license-manager-standalone.js --targets node18-win-x64 --output dist/MIGL-License-Manager.exe",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:api": "NODE_ENV=development node v3-server.js",
+    "start:api": "node v3-server.js"
   },
   "keywords": [
     "electron",

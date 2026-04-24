@@ -3,7 +3,7 @@
 // Business logic for client management
 // ========================================
 
-const { pool } = require('../v3-server');
+const { pool } = require('../db-v3');
 const { logAudit } = require('./audit');
 
 class ClientService {

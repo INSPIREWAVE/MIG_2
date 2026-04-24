@@ -4,7 +4,7 @@
 // ========================================
 
 const express = require('express');
-const { pool } = require('../v3-server');
+const { pool } = require('../db-v3');
 
 const router = express.Router();
 

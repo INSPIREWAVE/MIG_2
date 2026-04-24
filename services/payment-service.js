@@ -36,7 +36,7 @@ async function recordPayment(loanId, amount, paymentMethod, reference, paymentDa
     return await db.transaction(async (client) => {
       // Insert payment
       const paymentResult = await client.query(
-        `INSERT INTO payments (loan_id, amount, payment_method, reference, payment_date, user_id, branch_id)
+        `INSERT INTO payments (loan_id, amount, payment_method, reference, payment_date, recorded_by, branch_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, amount, payment_date, created_at`,
         [loanId, amountVal.value, methodVal.value, reference, paymentDate, userId, branchId]
@@ -69,9 +69,9 @@ async function recordPayment(loanId, amount, paymentMethod, reference, paymentDa
  */
 async function getPayment(paymentId, branchId) {
   const result = await db.query(
-    `SELECT p.*, u.username as recorded_by
+    `SELECT p.*, u.username as recorded_by_name
      FROM payments p
-     LEFT JOIN users u ON p.user_id = u.id
+     LEFT JOIN users u ON p.recorded_by = u.id
      WHERE p.id = $1 AND p.branch_id = $2`,
     [paymentId, branchId]
   );
@@ -88,9 +88,9 @@ async function getPayment(paymentId, branchId) {
  */
 async function listPaymentsForLoan(loanId, branchId, limit = 50, offset = 0) {
   const result = await db.query(
-    `SELECT p.*, u.username as recorded_by
+    `SELECT p.*, u.username as recorded_by_name
      FROM payments p
-     LEFT JOIN users u ON p.user_id = u.id
+     LEFT JOIN users u ON p.recorded_by = u.id
      WHERE p.loan_id = $1 AND p.branch_id = $2
      ORDER BY p.payment_date DESC
      LIMIT $3 OFFSET $4`,

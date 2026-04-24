@@ -42,8 +42,13 @@ async function createClient(data, branchId, userId) {
     const phoneVal = validatePhone(data.phone);
     if (!phoneVal.valid) throw validationError(phoneVal.error, 'phone');
     
-    const nameVal = validateString(data.name, 1, 255);
+    const nameVal = validateString(data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim(), 1, 255);
     if (!nameVal.valid) throw validationError(nameVal.error, 'name');
+
+    // Split name into first/last (schema uses first_name, last_name)
+    const nameParts = nameVal.value.trim().split(/\s+/);
+    const firstName = nameParts.slice(0, -1).join(' ') || nameParts[0];
+    const lastName  = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
     
     // Check if email already exists
     const existing = await db.query(
@@ -73,10 +78,10 @@ async function createClient(data, branchId, userId) {
     // Create client in transaction
     return await db.transaction(async (client) => {
       const result = await client.query(
-        `INSERT INTO clients (branch_id, client_number, name, email, phone, address, city, postal_code, created_by, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-         RETURNING id, client_number, name, email, created_at`,
-        [branchId, clientNumber, nameVal.value, emailVal.value, phoneVal.value,
+        `INSERT INTO clients (branch_id, client_number, first_name, last_name, email, phone, address, city, postal_code, created_by, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+         RETURNING id, client_number, first_name, last_name, first_name || ' ' || last_name AS name, email, created_at`,
+        [branchId, clientNumber, firstName, lastName, emailVal.value, phoneVal.value,
          data.address || null, data.city || null, data.postal_code || null, userId]
       );
       
@@ -104,7 +109,9 @@ async function createClient(data, branchId, userId) {
  */
 async function getClient(clientId, branchId) {
   const result = await db.query(
-    `SELECT id, client_number, name, email, phone, address, city, postal_code, is_active, created_at, updated_at
+    `SELECT id, client_number, first_name, last_name,
+            first_name || ' ' || last_name AS name,
+            email, phone, address, city, postal_code, is_active, created_at, updated_at
      FROM clients WHERE id = $1 AND branch_id = $2`,
     [clientId, branchId]
   );
@@ -146,9 +153,16 @@ async function updateClient(clientId, data, branchId, userId) {
       const params = [clientId, branchId];
       let paramCount = 2;
       
-      if (data.name) {
-        updates.push(`name = $${++paramCount}`);
-        params.push(data.name);
+      if (data.name || data.first_name || data.last_name) {
+        // Accept either combined 'name' or separate first_name/last_name
+        const fullName = data.name || `${data.first_name || ''} ${data.last_name || ''}`.trim();
+        const nameParts = fullName.split(/\s+/);
+        const fn = nameParts.slice(0, -1).join(' ') || nameParts[0];
+        const ln = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+        updates.push(`first_name = $${++paramCount}`);
+        params.push(fn);
+        updates.push(`last_name = $${++paramCount}`);
+        params.push(ln);
       }
       if (data.email) {
         updates.push(`email = $${++paramCount}`);
@@ -197,12 +211,14 @@ async function updateClient(clientId, data, branchId, userId) {
  * List clients
  */
 async function listClients(branchId, limit = 50, offset = 0, search = null) {
-  let query = `SELECT id, client_number, name, email, phone, is_active, created_at
+  let query = `SELECT id, client_number, first_name, last_name,
+                      first_name || ' ' || last_name AS name,
+                      email, phone, is_active, created_at
                FROM clients WHERE branch_id = $1`;
   const params = [branchId];
-  
+
   if (search) {
-    query += ` AND (name ILIKE $${params.length + 1} OR client_number ILIKE $${params.length + 1})`;
+    query += ` AND (first_name ILIKE $${params.length + 1} OR last_name ILIKE $${params.length + 1} OR client_number ILIKE $${params.length + 1})`;
     params.push(`%${search}%`);
   }
   
