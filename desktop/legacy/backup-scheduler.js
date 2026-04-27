@@ -1,13 +1,15 @@
 const path = require('path');
 const fs = require('fs');
 const config = require('../config');
+const cryptoUtils = require('../electron/crypto-utils');
 
 // Backup scheduler for automatic database backups
 class BackupScheduler {
-  constructor(db) {
+  constructor(db, backupPassword = null) {
     this.db = db;
     this.scheduledBackup = null;
     this.isRunning = false;
+    this.backupPassword = backupPassword; // Optional encryption password
   }
 
   /**

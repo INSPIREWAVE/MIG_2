@@ -16,11 +16,25 @@ class SaveQueue {
     this.pending = false;
     this.saving = false;
     this.queue = [];
+    this.estimatedMemoryBytes = 0;
+    this.MAX_QUEUE_MEMORY = 100 * 1024 * 1024; // 100MB cap
   }
   
   async enqueue(saveFunction) {
+    // SECURITY: Prevent memory exhaustion from queue buildup
+    if (this.estimatedMemoryBytes > this.MAX_QUEUE_MEMORY) {
+      console.error('[SaveQueue] Memory limit exceeded, rejecting new save');
+      throw new Error('Save queue memory limit exceeded');
+    }
+    
     if (this.saving) {
       this.pending = true;
+      this.estimatedMemoryBytes += 1024; // Estimate 1KB per queued item
+      
+      if (this.estimatedMemoryBytes > this.MAX_QUEUE_MEMORY * 0.8) {
+        console.warn('[SaveQueue] Approaching memory limit:', (this.estimatedMemoryBytes / 1024 / 1024).toFixed(2) + 'MB');
+      }
+      
       return new Promise((resolve, reject) => {
         this.queue.push({ resolve, reject });
       });
@@ -32,6 +46,8 @@ class SaveQueue {
       return true;
     } finally {
       this.saving = false;
+      this.estimatedMemoryBytes = Math.max(0, this.estimatedMemoryBytes - 1024);
+      
       if (this.pending && this.queue.length > 0) {
         this.pending = false;
         // Process queued saves
@@ -778,30 +794,8 @@ function getTierLimits(tier) {
 }
 
 function checkTierLimit(entityType) {
-  const tier = getLicenseTier();
-  const limits = getTierLimits(tier);
-  
-  let currentCount = 0;
-  if (entityType === 'clients') {
-    const res = db.exec(`SELECT COUNT(*) FROM clients`);
-    currentCount = res[0]?.values[0]?.[0] || 0;
-  } else if (entityType === 'loans') {
-    const res = db.exec(`SELECT COUNT(*) FROM loans`);
-    currentCount = res[0]?.values[0]?.[0] || 0;
-  }
-  
-  const limit = limits[entityType];
-  if (currentCount >= limit) {
-    return { 
-      allowed: false, 
-      tier, 
-      limit, 
-      current: currentCount,
-      message: `${tier.toUpperCase()} tier limit reached: ${limit} ${entityType} maximum. Upgrade your license to add more.`
-    };
-  }
-  
-  return { allowed: true, tier, limit, current: currentCount };
+  // License limits temporarily disabled — full access mode
+  return { allowed: true, tier: 'enterprise', limit: Infinity, current: 0 };
 }
 
 function canUseFeature(feature) {

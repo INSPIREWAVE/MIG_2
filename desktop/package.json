@@ -17,12 +17,13 @@
   "author": "MIG Development",
   "license": "ISC",
   "type": "commonjs",
+  "packageManager": "npm@11.12.1",
   "engines": {
-    "node": ">=18"
+    "node": ">=18 <=24"
   },
   "devDependencies": {
-    "electron": "^41.0.0",
-    "electron-builder": "^25.1.8",
+    "electron": "41.0.0",
+    "electron-builder": "25.1.8",
     "pkg": "^5.8.1",
     "png-to-ico": "^3.0.1"
   },
@@ -40,6 +41,8 @@
     "appId": "com.mig.loansmanagement",
     "productName": "M.I.G Loans Management",
     "asar": false,
+    "electronVersion": "41.0.0",
+    "electronDist": "./node_modules/electron/dist",
     "files": [
       "electron/**/*",
       "legacy/**/*",
@@ -68,8 +71,10 @@
         }
       ],
       "icon": "logo/icon.ico",
-      "publisherName": "MIG",
-      "verifyUpdateCodeSignature": false
+      "verifyUpdateCodeSignature": false,
+      "signtoolOptions": {
+        "publisherName": "MIG"
+      }
     },
     "nsis": {
       "oneClick": false,
@@ -84,9 +89,7 @@
       "runAfterFinish": true,
       "warningsAsErrors": false,
       "installerIcon": "logo/icon.ico",
-      "uninstallerIcon": "logo/icon.ico",
-      "installerHeader": "logo/MIG-LOGO-LB.png",
-      "installerSidebar": "logo/MIG-LOGO-LB.png"
+      "uninstallerIcon": "logo/icon.ico"
     },
     "portable": {
       "artifactName": "${productName}-Portable-${version}.${ext}"

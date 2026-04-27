@@ -50,13 +50,35 @@ function readConfig() {
     const configFile = getConfigPath();
     if (fs.existsSync(configFile)) {
       const content = fs.readFileSync(configFile, 'utf-8');
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      
+      // SECURITY: Validate config structure
+      const validConfig = validateConfigSchema(parsed);
+      if (!validConfig) {
+        console.warn('[CONFIG] Invalid config structure, using defaults');
+        return getDefaultConfig();
+      }
+      
+      return parsed;
     }
     return getDefaultConfig();
   } catch (err) {
     console.error('[CONFIG] Error reading config:', err.message);
     return getDefaultConfig();
   }
+}
+
+function validateConfigSchema(config) {
+  // Validate required top-level properties
+  if (!config || typeof config !== 'object') return false;
+  if (typeof config.version !== 'string') return false;
+  if (typeof config.dataDirectory !== 'string') return false;
+  if (typeof config.hasCompletedSetup !== 'boolean') return false;
+  if (config.theme && typeof config.theme !== 'string') return false;
+  if (config.language && typeof config.language !== 'string') return false;
+  if (config.backup && typeof config.backup !== 'object') return false;
+  
+  return true;
 }
 
 function writeConfig(config) {

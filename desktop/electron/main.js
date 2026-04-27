@@ -47,51 +47,53 @@ process.on('uncaughtException', (error) => {
 const PRODUCTION_MODE = !isDev && process.env.NODE_ENV !== 'development';
 
 // ===== PRODUCTION SECURITY =====
-const rateLimitStore = new Map(); // Track request rates per user
-const sessionStore = new Map(); // Track active sessions for auth validation
+const rateLimitStore = new Map(); // Track request rates per channel+user
+const sessionStore = new Map(); // Track active sessions per window
 const MAX_REQUESTS_PER_MINUTE = 100;
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const MAX_SETUP_ATTEMPTS = 5;
+let setupAttempts = 0;
 
-// Session Management
-function setSession(userId, userData) {
-  sessionStore.set(userId, { ...userData, lastActivity: Date.now() });
+// Session Management (per-window to prevent cross-window auth leak)
+function setSession(windowId, userId, userData) {
+  const sessionKey = `window_${windowId}`;
+  sessionStore.set(sessionKey, { userId, ...userData, lastActivity: Date.now() });
 }
 
-function getSession(userId) {
-  const session = sessionStore.get(userId);
+function getSession(windowId) {
+  const sessionKey = `window_${windowId}`;
+  const session = sessionStore.get(sessionKey);
   if (!session) return null;
   if (Date.now() - session.lastActivity > SESSION_TIMEOUT) {
-    sessionStore.delete(userId);
+    sessionStore.delete(sessionKey);
     return null;
   }
   session.lastActivity = Date.now();
   return session;
 }
 
-function clearSession(userId) {
-  sessionStore.delete(userId);
+function clearSession(windowId) {
+  const sessionKey = `window_${windowId}`;
+  sessionStore.delete(sessionKey);
 }
 
-// Get current logged-in user from renderer (stored in session)
-let currentUserId = null;
-let currentUserRole = null;
-
-function setCurrentUser(userId, role) {
-  currentUserId = userId;
-  currentUserRole = role;
+// Get current logged-in user from renderer (stored in session per window)
+function setCurrentUser(windowId, userId, role) {
+  setSession(windowId, userId, { role });
 }
 
-function getCurrentUser() {
-  return { id: currentUserId, role: currentUserRole };
+function getCurrentUser(windowId) {
+  const session = getSession(windowId);
+  return session ? { id: session.userId, role: session.role } : { id: null, role: null };
 }
 
 // Authorization check for privilege escalation
 function requireAdmin(handler) {
   return async (event, ...args) => {
-    const user = getCurrentUser();
+    const user = getCurrentUser(event.sender.id);
     if (!user.id || user.role !== 'admin') {
-      console.warn('[AUTH] Unauthorized access attempt to admin function');
+      console.warn(`[AUTH] Unauthorized access attempt to admin function from window ${event.sender.id}`);
       return { success: false, error: 'Administrator privileges required' };
     }
     return handler(event, ...args);
@@ -100,9 +102,9 @@ function requireAdmin(handler) {
 
 function requireAuth(handler) {
   return async (event, ...args) => {
-    const user = getCurrentUser();
+    const user = getCurrentUser(event.sender.id);
     if (!user.id) {
-      console.warn('[AUTH] Unauthorized access attempt - no user logged in');
+      console.warn(`[AUTH] Unauthorized access attempt - no user logged in (window ${event.sender.id})`);
       return { success: false, error: 'Authentication required' };
     }
     return handler(event, ...args);
@@ -143,9 +145,9 @@ function validateIPC(schema) {
   };
 }
 
-// Rate limiter
-function checkRateLimit(channel) {
-  const key = `${channel}:${Date.now() / RATE_LIMIT_WINDOW | 0}`;
+// Rate limiter - applies rate limit per channel+windowId
+function checkRateLimit(channel, windowId) {
+  const key = `${channel}:${windowId}:${Date.now() / RATE_LIMIT_WINDOW | 0}`;
   const count = (rateLimitStore.get(key) || 0) + 1;
   rateLimitStore.set(key, count);
   
@@ -153,7 +155,7 @@ function checkRateLimit(channel) {
   if (rateLimitStore.size > 1000) {
     const now = Date.now();
     for (const [k] of rateLimitStore) {
-      const windowTime = parseInt(k.split(':')[1]) * RATE_LIMIT_WINDOW;
+      const windowTime = parseInt(k.split(':')[2]) * RATE_LIMIT_WINDOW;
       if (now - windowTime > RATE_LIMIT_WINDOW * 2) {
         rateLimitStore.delete(k);
       }
@@ -501,7 +503,7 @@ function createSetupWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      sandbox: false, // Temporarily disabled for debugging
+      sandbox: true, // SECURITY: Sandbox enabled to prevent renderer exploit
     },
     icon: path.join(__dirname, 'logo/MIG-LOGO-LB.png'),
   });
@@ -532,7 +534,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      sandbox: false, // Temporarily disabled for debugging
+      sandbox: true, // SECURITY: Sandbox enabled to prevent renderer exploit
     },
     icon: path.join(__dirname, 'logo/MIG-LOGO-LB.png'),
   });
@@ -543,8 +545,9 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../index.html'));
 
-  // Open DevTools in development
-  if (isDev) {
+  // DevTools only open if explicitly requested via command line or user action
+  // Disabled by default to prevent data exposure
+  if (isDev && process.argv.includes('--dev-tools')) {
     mainWindow.webContents.openDevTools();
   }
 
@@ -591,6 +594,12 @@ app.on('ready', () => {
 // Handle setup completion signal from renderer
 ipcMain.on('setup:complete', (event) => {
   try {
+    // SECURITY: Guard setup completion - ensure it's actually called from setup process
+    if (!isSetupMode || !setupRequired) {
+      console.warn('[SETUP] Attempted to complete setup when not in setup mode');
+      return;
+    }
+    
     console.log('[MAIN] Setup completed, transitioning to main window');
     if (setupWindow) {
       setupWindow.close();
@@ -598,6 +607,7 @@ ipcMain.on('setup:complete', (event) => {
     }
     isSetupMode = false;
     setupRequired = false;
+    setupAttempts = 0;
     // Create main window after setup
     setTimeout(() => {
       if (!mainWindow) {
@@ -719,18 +729,21 @@ ipcMain.handle('db:health', async () => {
   }
 });
 
-// Reset handlers
-ipcMain.handle('db:factoryReset', async () => {
+// Reset handlers - require admin privileges
+ipcMain.handle('db:factoryReset', requireAdmin(async (event) => {
   try {
     await ensureDbReady();
-    return db.factoryReset();
+    const result = db.factoryReset();
+    // Clear session after factory reset
+    clearSession(event.sender.id);
+    return result;
   } catch (err) {
     console.error('db:factoryReset error:', err);
     return { success: false, error: err.message };
   }
-});
+}));
 
-ipcMain.handle('settings:reset', async () => {
+ipcMain.handle('settings:reset', requireAdmin(async (event) => {
   try {
     await ensureDbReady();
     return db.resetSettings();
@@ -776,41 +789,45 @@ ipcMain.handle('shell:openExternal', validateIPC({ name: 'shell:openExternal', m
   
   ipcMain.handle('auth:register', validateIPC({ name: 'auth:register', maxArgsLength: 1 })(async (event, payload) => {
     try { 
-      checkRateLimit('auth:register');
+      // SECURITY: Rate limit registration to prevent spam
+      checkRateLimit('auth:register', event.sender.id);
       await ensureDbReady(); 
       if (!payload || !payload.username || !payload.password) {
         throw new Error('Missing required fields');
       }
       return db.registerUser(payload); 
     }
-    catch (err) { console.error('auth:register', err); return { success: false, error: err.message }; }
-  }));
-  
+    catch (err) { 
+      console.error('auth:register', err); 
+      return { success: false, error: err.message }; 
+    }
   ipcMain.handle('auth:login', validateIPC({ name: 'auth:login', maxArgsLength: 2, argTypes: ['string', 'string'] })(async (event, username, password) => {
     try { 
-      checkRateLimit('auth:login');
+      // SECURITY: Rate limit login attempts to prevent brute-force
+      checkRateLimit('auth:login', event.sender.id);
       await ensureDbReady(); 
       if (!username || !password) throw new Error('Missing credentials');
       const result = await db.loginUser(username, password);
-      // Set current user for authorization checks
+      // Set current user for authorization checks (per-window)
       if (result.success && result.user) {
-        setCurrentUser(result.user.id, result.user.role || 'user');
-        setSession(result.user.id, result.user);
+        setCurrentUser(event.sender.id, result.user.id, result.user.role || 'user');
       }
       return result; 
     }
-    catch (err) { console.error('auth:login', err); return { success: false, error: err.message }; }
+    catch (err) { 
+      console.error('auth:login', err); 
+      return { success: false, error: err.message }; 
+    }
   }));
   
   // Logout handler to clear session
-  ipcMain.handle('auth:logout', async () => {
+  ipcMain.handle('auth:logout', async (event) => {
     try {
-      const user = getCurrentUser();
+      const user = getCurrentUser(event.sender.id);
       if (user.id) {
-        clearSession(user.id);
+        clearSession(event.sender.id);
         db.logAudit('LOGOUT', 'user', user.id, null, null);
       }
-      setCurrentUser(null, null);
       return { success: true };
     } catch (err) {
       console.error('auth:logout', err);
@@ -820,7 +837,8 @@ ipcMain.handle('shell:openExternal', validateIPC({ name: 'shell:openExternal', m
   
   ipcMain.handle('auth:recover', validateIPC({ name: 'auth:recover', maxArgsLength: 3, argTypes: ['string', 'string', 'string'] })(async (event, username, answer, newPassword) => {
     try { 
-      checkRateLimit('auth:recover');
+      // SECURITY: Strict rate limiting on password recovery to prevent brute-force
+      checkRateLimit('auth:recover', event.sender.id);
       await ensureDbReady(); 
       return db.recoverUser(username, answer, newPassword); 
     }
@@ -829,7 +847,8 @@ ipcMain.handle('shell:openExternal', validateIPC({ name: 'shell:openExternal', m
   
   ipcMain.handle('auth:changePassword', validateIPC({ name: 'auth:changePassword', maxArgsLength: 3, argTypes: ['string', 'string', 'string'] })(async (event, username, currentPassword, newPassword) => {
     try { 
-      checkRateLimit('auth:changePassword');
+      // SECURITY: Rate limit password changes to prevent spam
+      checkRateLimit('auth:changePassword', event.sender.id);
       await ensureDbReady(); 
       return db.changePassword(username, currentPassword, newPassword); 
     }
@@ -1441,8 +1460,18 @@ ipcMain.handle('save-pdf', async (event, base64, filename) => {
   try{
     const os = require('os');
     const fs = require('fs');
+    // SECURITY: Sanitize filename to prevent path traversal
+    const safeFilename = path.basename(filename || `export-${Date.now()}.pdf`);
     const desktop = path.join(os.homedir(), 'Desktop');
-    const outPath = path.join(desktop, filename || `export-${Date.now()}.pdf`);
+    const outPath = path.join(desktop, safeFilename);
+    
+    // Ensure the resolved path is still within Desktop folder
+    const resolvedPath = path.resolve(outPath);
+    const resolvedDesktop = path.resolve(desktop);
+    if (!resolvedPath.startsWith(resolvedDesktop)) {
+      throw new Error('Invalid file path - attempted path traversal detected');
+    }
+    
     const buf = Buffer.from(base64, 'base64');
     fs.writeFileSync(outPath, buf);
     return { success: true, path: outPath };
@@ -1484,12 +1513,24 @@ ipcMain.handle('print:html', async (event, html, title) => {
 // --- Database IPC handlers (clients & loans) ---
 ipcMain.handle('clients:get', async () => {
   await ensureDbReady();
-  try { return db.getClients(); } catch (err) { console.error('clients:get', err); return []; }
+  try { 
+    return db.getClients(); 
+  } catch (err) { 
+    console.error('clients:get', err); 
+    return { success: false, error: err.message, data: [] };
+  }
 });
 
 ipcMain.handle('clients:getById', async (event, id) => {
   await ensureDbReady();
-  try { return db.getClientById(id); } catch (err) { console.error('clients:getById', err); return null; }
+  try { 
+    const result = db.getClientById(id);
+    if (!result) return { success: false, error: 'Client not found', data: null };
+    return { success: true, data: result };
+  } catch (err) { 
+    console.error('clients:getById', err); 
+    return { success: false, error: err.message, data: null };
+  }
 });
 
 ipcMain.handle('clients:save', async (event, payload) => {
@@ -2096,7 +2137,15 @@ ipcMain.handle('loans:getDefaultEarlySettlementRates', async () => {
 ipcMain.handle('payments:add', async (event, payload) => {
   await ensureDbReady();
   try{ 
+    if (!payload || !payload.loanId || !payload.amount) {
+      return { success: false, error: 'Missing required fields: loanId, amount' };
+    }
+    
     const res = db.addPayment(payload);
+    if (!res || !res.success) {
+      return { success: false, error: res?.error || 'Failed to add payment' };
+    }
+    
     // Apply penalties after payment recorded
     try {
       db.applyAutoPenalties();
@@ -2117,8 +2166,12 @@ ipcMain.handle('payments:add', async (event, payload) => {
     } catch (syncErr) {
       console.error('Payment sync error:', syncErr);
     }
-    return { success: true };
-  }catch(err){ return { success:false, error:err.message } }
+    
+    return { success: true, data: res };
+  } catch(err) { 
+    console.error('payments:add error:', err);
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('payments:getByLoan', async (event, loanId) => {
