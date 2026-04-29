@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('api', {
     logout: () => ipcRenderer.invoke('auth:logout'),
     recover: (username, answer, newPassword) => ipcRenderer.invoke('auth:recover', username, answer, newPassword),
     changePassword: (username, currentPassword, newPassword) => ipcRenderer.invoke('auth:changePassword', username, currentPassword, newPassword),
+    resetPassword: (username, newPassword) => ipcRenderer.invoke('auth:resetPassword', username, newPassword),
     getAllUsers: () => ipcRenderer.invoke('auth:getAllUsers'),
     updateUserRole: (userId, role, permissions) => ipcRenderer.invoke('auth:updateUserRole', userId, role, permissions),
     toggleUserStatus: (userId, isActive) => ipcRenderer.invoke('auth:toggleUserStatus', userId, isActive),
@@ -238,9 +239,6 @@ contextBridge.exposeInMainWorld('api', {
     exportData: (exportPath, options) => ipcRenderer.invoke('migration:exportData', exportPath, options),
     importData: (importPath) => ipcRenderer.invoke('migration:importData', importPath)
   },
-  // Generic send/receive for other channels
-  send: (channel, data) => ipcRenderer.send(channel, data),
-  receive: (channel, func) => ipcRenderer.on(channel, (event, ...args) => func(...args)),
   // Expense tracker
   expenses: {
     add: (data) => ipcRenderer.invoke('expenses:add', data),
@@ -264,5 +262,13 @@ contextBridge.exposeInMainWorld('api', {
   // Loan meta (officer, guarantor, purpose, restructure)
   loanMeta: {
     update: (loanId, data) => ipcRenderer.invoke('loans:updateMeta', loanId, data),
+  },
+  // One-way typed IPC for setup lifecycle and system actions
+  setup: {
+    complete: () => ipcRenderer.send('setup:complete'),
+    onShow: (callback) => ipcRenderer.on('setup:show', (_event) => callback()),
+  },
+  system: {
+    openFolder: (folderPath) => ipcRenderer.send('system:openFolder', { path: folderPath }),
   },
 });

@@ -79,6 +79,9 @@ async function initDB(userDataPath) {
   if (userDataPath) {
     dataDir = path.join(userDataPath, 'data');
     dbPath = path.join(dataDir, 'migl360.db');
+    // Keep derived paths in sync whenever dataDir changes
+    backupDir = path.join(dataDir, 'backups');
+    logsDir = path.join(dataDir, 'logs');
   }
   
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -296,6 +299,9 @@ async function initDB(userDataPath) {
   ensureColumn('users', 'permissions', 'TEXT DEFAULT "read,write"');
   ensureColumn('users', 'isActive', 'INTEGER DEFAULT 1');
   ensureColumn('users', 'lastLogin', 'TEXT');
+  // Add filePath to backups table so new backups store the DB file path instead of
+  // embedding the entire database as base64 inside the database itself.
+  ensureColumn('backups', 'filePath', 'TEXT');
   
   // ===== PAYMENTS MODULE UPGRADE (v2.4.0) =====
   // Enhanced payment tracking columns
@@ -926,6 +932,18 @@ async function changePassword(username, currentPassword, newPassword) {
   const newHash = await hashPasswordBcrypt(newPassword);
   db.run(`UPDATE users SET passwordHash = ? WHERE id = ?`, [newHash, user.id]);
   logAudit('UPDATE', 'user', user.id, 'PASSWORD_CHANGE', user.username);
+  saveDB();
+  return { success: true };
+}
+
+// Admin-only password reset: sets a new password without verifying the old one.
+// Authorization enforcement is done in main.js (requireAdmin middleware).
+async function resetPassword(username, newPassword) {
+  const user = getUserByUsername(username);
+  if (!user) return { success: false, error: 'User not found' };
+  const newHash = await hashPasswordBcrypt(newPassword);
+  db.run(`UPDATE users SET passwordHash = ? WHERE id = ?`, [newHash, user.id]);
+  logAudit('UPDATE', 'user', user.id, 'ADMIN_PASSWORD_RESET', user.username);
   saveDB();
   return { success: true };
 }
@@ -2103,6 +2121,7 @@ module.exports = {
   loginUser: (username, password) => verifyUser(username, password),
   recoverUser: (username, answer, newPassword) => recoverUser(username, answer, newPassword),
   changePassword: (username, currentPassword, newPassword) => changePassword(username, currentPassword, newPassword),
+  resetPassword: (username, newPassword) => resetPassword(username, newPassword),
   getAllUsers: () => getAllUsers(),
   updateUserRole: (userId, role, permissions) => updateUserRole(userId, role, permissions),
   toggleUserStatus: (userId, isActive) => toggleUserStatus(userId, isActive),
@@ -2950,45 +2969,95 @@ module.exports = {
       notes: row[9]
     }));
   },
-  // Backup & Balance Sheets - FULL IMPLEMENTATION
-  createBackup: (type = 'manual') => { 
-    const backupName = `backup_${type}_${Date.now()}`;
-    const backupData = db.export();
-    const backupString = Buffer.from(backupData).toString('base64');
-    db.run(`INSERT INTO backups (backupName, backupType, backupData, notes) VALUES (?, ?, ?, ?)`,
-      [backupName, type, backupString, `Backup created at ${new Date().toISOString()}`]);
-    const res = db.exec(`SELECT last_insert_rowid() as id`);
-    const newId = res[0]?.values[0]?.[0] || Date.now();
-    logAudit('CREATE', 'backup', newId, null, backupName);
-    saveDB();
-    return { success: true, id: newId, name: backupName };
+  // Backup & Balance Sheets - FILE-BASED BACKUP SYSTEM
+  // Backups are stored as real .db files on disk; only metadata is kept in the DB.
+  createBackup: (type = 'manual') => {
+    try {
+      if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const backupName = `backup_${type}_${timestamp}`;
+      const backupFileName = `${backupName}.db`;
+      const backupFilePath = path.join(backupDir, backupFileName);
+
+      // Export current in-memory DB directly to a file
+      const data = db.export();
+      fs.writeFileSync(backupFilePath, Buffer.from(data));
+
+      // Store only metadata in the DB; backupData holds '' to satisfy legacy NOT NULL constraint
+      db.run(
+        `INSERT INTO backups (backupName, backupType, backupData, filePath, notes) VALUES (?, ?, ?, ?, ?)`,
+        [backupName, type, '', backupFilePath, `Backup created at ${new Date().toISOString()}`]
+      );
+      const res = db.exec(`SELECT last_insert_rowid() as id`);
+      const newId = res[0]?.values[0]?.[0] || Date.now();
+      logAudit('CREATE', 'backup', newId, null, backupName);
+
+      // Prune oldest backup files beyond retention limit
+      try {
+        const files = fs.readdirSync(backupDir)
+          .filter(f => f.startsWith('backup_') && f.endsWith('.db'))
+          .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtime }))
+          .sort((a, b) => b.time - a.time);
+        files.slice(BACKUP_RETENTION).forEach(f => { try { fs.unlinkSync(f.path); } catch (e) {} });
+      } catch (e) { /* non-critical */ }
+
+      saveDB();
+      return { success: true, id: newId, name: backupName, filePath: backupFilePath };
+    } catch (err) {
+      console.error('[DB] createBackup error:', err);
+      return { success: false, error: err.message };
+    }
   },
   getBackups: () => { 
-    const res = db.exec(`SELECT id, backupName, backupDate, backupType, notes FROM backups ORDER BY backupDate DESC`);
+    const res = db.exec(`SELECT id, backupName, backupDate, backupType, filePath, notes FROM backups ORDER BY backupDate DESC`);
     if (!res[0]) return [];
     return res[0].values.map(row => ({
       id: row[0],
       backupName: row[1],
       backupDate: row[2],
       backupType: row[3],
-      notes: row[4]
+      filePath: row[4] || null,
+      notes: row[5]
     }));
   },
-  restoreBackup: (backupId) => { 
-    const res = db.exec(`SELECT backupData FROM backups WHERE id = ?`, [backupId]);
-    if (!res[0] || !res[0].values[0]) {
-      return { success: false, error: 'Backup not found' };
+  restoreBackup: (backupId) => {
+    try {
+      const res = db.exec(`SELECT backupData, filePath FROM backups WHERE id = ?`, [backupId]);
+      if (!res[0] || !res[0].values[0]) {
+        return { success: false, error: 'Backup not found' };
+      }
+      const [backupData, filePath] = res[0].values[0];
+
+      let buffer;
+      if (filePath && fs.existsSync(filePath)) {
+        // Preferred: restore from file
+        buffer = fs.readFileSync(filePath);
+      } else if (backupData && backupData.length > 0) {
+        // Legacy fallback: restore from base64 blob stored in DB
+        buffer = Buffer.from(backupData, 'base64');
+      } else {
+        return { success: false, error: 'Backup file not found and no embedded data available' };
+      }
+
+      db.close();
+      db = new SQL.Database(buffer);
+      logAudit('RESTORE', 'backup', backupId, null, 'Database restored from backup');
+      saveDB();
+      return { success: true };
+    } catch (err) {
+      console.error('[DB] restoreBackup error:', err);
+      return { success: false, error: err.message };
     }
-    const backupData = res[0].values[0][0];
-    const buffer = Buffer.from(backupData, 'base64');
-    db.close();
-    db = new SQL.Database(buffer);
-    logAudit('RESTORE', 'backup', backupId, null, 'Database restored from backup');
-    saveDB();
-    return { success: true };
   },
   deleteBackup: (backupId) => {
     try {
+      const res = db.exec(`SELECT filePath FROM backups WHERE id = ?`, [backupId]);
+      const filePath = res[0]?.values[0]?.[0];
+      // Delete the backup file from disk if it exists
+      if (filePath && fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (e) { console.warn('[DB] Could not delete backup file:', e.message); }
+      }
       db.run(`DELETE FROM backups WHERE id = ?`, [backupId]);
       logAudit('DELETE', 'backup', backupId, null, 'Backup deleted');
       saveDB();

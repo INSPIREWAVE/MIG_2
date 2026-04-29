@@ -40,7 +40,7 @@
   "build": {
     "appId": "com.mig.loansmanagement",
     "productName": "M.I.G Loans Management",
-    "asar": false,
+    "asar": true,
     "electronVersion": "41.0.0",
     "electronDist": "./node_modules/electron/dist",
     "files": [

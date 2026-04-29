@@ -146,8 +146,10 @@ function validateIPC(schema) {
 }
 
 // Rate limiter - applies rate limit per channel+windowId
+// Key format uses "|" as separator so channel names containing ":" do not break parsing.
 function checkRateLimit(channel, windowId) {
-  const key = `${channel}:${windowId}:${Date.now() / RATE_LIMIT_WINDOW | 0}`;
+  const bucket = (Date.now() / RATE_LIMIT_WINDOW) | 0;
+  const key = `${channel}|${windowId}|${bucket}`;
   const count = (rateLimitStore.get(key) || 0) + 1;
   rateLimitStore.set(key, count);
   
@@ -155,8 +157,9 @@ function checkRateLimit(channel, windowId) {
   if (rateLimitStore.size > 1000) {
     const now = Date.now();
     for (const [k] of rateLimitStore) {
-      const windowTime = parseInt(k.split(':')[2]) * RATE_LIMIT_WINDOW;
-      if (now - windowTime > RATE_LIMIT_WINDOW * 2) {
+      const parts = k.split('|');
+      const entryBucket = parseInt(parts[2], 10);
+      if (!isNaN(entryBucket) && now - entryBucket * RATE_LIMIT_WINDOW > RATE_LIMIT_WINDOW * 2) {
         rateLimitStore.delete(k);
       }
     }
@@ -172,8 +175,9 @@ setInterval(() => {
   const now = Date.now();
   let cleaned = 0;
   for (const [key] of rateLimitStore) {
-    const windowTime = parseInt(key.split(':')[1]) * RATE_LIMIT_WINDOW;
-    if (now - windowTime > RATE_LIMIT_WINDOW * 2) {
+    const parts = key.split('|');
+    const entryBucket = parseInt(parts[2], 10);
+    if (!isNaN(entryBucket) && now - entryBucket * RATE_LIMIT_WINDOW > RATE_LIMIT_WINDOW * 2) {
       rateLimitStore.delete(key);
       cleaned++;
     }
@@ -273,20 +277,19 @@ async function ensureDbReady() {
 async function handleVersionReset() {
   try {
     const storedVersion = db.getSettingByKey('app_version');
-    const resetFlag = db.getSettingByKey('reset_on_version_change');
-    const shouldReset = resetFlag === null ? true : (resetFlag === '1' || isDev);
 
     if (!storedVersion) {
+      // First run: record current version. Never auto-wipe.
       db.setSetting('app_version', APP_VERSION);
-      if (resetFlag === null) db.setSetting('reset_on_version_change', '1');
       return;
     }
 
-    if (storedVersion !== APP_VERSION && shouldReset) {
-      console.log('[MAIN] App version changed. Resetting local data for a clean start.');
-      await db.resetDatabase();
+    if (storedVersion !== APP_VERSION) {
+      // Version changed: record the new version. Schema migrations run automatically
+      // in db.initDB() via ensureColumn. User data is NEVER automatically deleted.
+      console.log(`[MAIN] App version changed: ${storedVersion} → ${APP_VERSION}. Updating version record.`);
       db.setSetting('app_version', APP_VERSION);
-      db.setSetting('reset_on_version_change', shouldReset ? '1' : '0');
+      db.logAudit('VERSION_UPGRADE', 'system', 0, storedVersion, APP_VERSION);
     }
   } catch (err) {
     console.error('handleVersionReset error:', err);
@@ -854,6 +857,20 @@ ipcMain.handle('shell:openExternal', validateIPC({ name: 'shell:openExternal', m
     }
     catch (err) { console.error('auth:changePassword', err); return { success: false, error: err.message }; }
   }));
+
+  // Admin-only: reset any user's password without needing their current password
+  ipcMain.handle('auth:resetPassword', validateIPC({ name: 'auth:resetPassword', maxArgsLength: 2, argTypes: ['string', 'string'] })(requireAdmin(async (event, username, newPassword) => {
+    try {
+      checkRateLimit('auth:resetPassword', event.sender.id);
+      await ensureDbReady();
+      if (!username || !newPassword) return { success: false, error: 'Username and new password are required' };
+      if (newPassword.length < 6) return { success: false, error: 'Password must be at least 6 characters' };
+      const adminUser = getCurrentUser(event.sender.id);
+      db.logAudit('ADMIN_PASSWORD_RESET', 'user', null, `by:${adminUser.id}`, username);
+      return db.resetPassword(username, newPassword);
+    }
+    catch (err) { console.error('auth:resetPassword', err); return { success: false, error: err.message }; }
+  })));
   
   ipcMain.handle('auth:getAllUsers', requireAuth(async () => {
     try { 
@@ -3325,10 +3342,9 @@ ipcMain.handle('backup:restore', async (event, backupId) => {
   await ensureDbReady();
   try { 
     const result = db.restoreBackup(backupId);
-    // Reinitialize DB after restore
+    // After restore the in-memory DB has been replaced; persist it and mark ready
     if (result.success) {
-      dbReady = false;
-      await ensureDbReady();
+      dbReady = true; // db module already reloaded the DB in-memory
     }
     return result;
   } catch (err) { console.error('backup:restore', err); return { success: false, error: err.message }; }

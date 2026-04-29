@@ -9758,7 +9758,7 @@
             <h3>🔧 Diagnostic Tools</h3>
             <p style="color:#6b7280; font-size:13px; margin-bottom:16px;">Tools for troubleshooting and maintenance.</p>
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:16px;">
-              <button class="btn btn-secondary" onclick="(async()=>{try{const r=await window.api.config.getDataDirectory();if(r.success){window.api.send('system:openFolder',{path:r.dataDirectory});toast('Opening data folder...');}else{toast('Could not resolve data directory','error');}}catch(e){toast('Error opening data folder','error');}})()" title="Open app data folder">📂 Open Data Folder</button>
+              <button class="btn btn-secondary" onclick="(async()=>{try{const r=await window.api.config.getDataDirectory();if(r.success){window.api.system.openFolder(r.dataDirectory);toast('Opening data folder...');}else{toast('Could not resolve data directory','error');}}catch(e){toast('Error opening data folder','error');}})()" title="Open app data folder">📂 Open Data Folder</button>
               <button class="btn btn-secondary" onclick="location.reload()" title="Refresh the application">🔄 Refresh App</button>
               <button class="btn btn-secondary" onclick="runDBIntegrityCheck()" title="Check database integrity">🔍 DB Integrity Check</button>
               <button class="btn btn-secondary" onclick="exportSystemLogs()" title="Export application logs">📋 Export Logs</button>
@@ -27860,12 +27860,12 @@
           <div class="field">
             <label>Collateral Image</label>
             <button class="btn btn-secondary btn-small" onclick="selectCollateralImage()" id="btn-select-image">📷 Select Image</button>
-            <div id="image-preview" style="margin-top: 8px; font-size: 11px; color: #6b7280;">No image selected</div>
+            <div id="modal-image-preview" style="margin-top: 8px; font-size: 11px; color: #6b7280;">No image selected</div>
           </div>
           <div class="field">
             <label>Collateral Document</label>
             <button class="btn btn-secondary btn-small" onclick="selectCollateralDocument()" id="btn-select-document">📄 Select Document</button>
-            <div id="document-preview" style="margin-top: 8px; font-size: 11px; color: #6b7280;">No document selected</div>
+            <div id="modal-document-preview" style="margin-top: 8px; font-size: 11px; color: #6b7280;">No document selected</div>
           </div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 20px;">
@@ -27908,7 +27908,7 @@
         const result = await window.api.collateral.selectImage();
         if (result.success) {
           selectedImagePath = result.path;
-          $('#image-preview').textContent = `Selected: ${result.path.split(/[/\\]/).pop()}`;
+          $('#modal-image-preview').textContent = `Selected: ${result.path.split(/[/\\]/).pop()}`;
           toast('Image selected', 'ok');
         }
       } catch (e) {
@@ -27921,7 +27921,7 @@
         const result = await window.api.collateral.selectDocument();
         if (result.success) {
           selectedDocumentPath = result.path;
-          $('#document-preview').textContent = `Selected: ${result.path.split(/[/\\]/).pop()}`;
+          $('#modal-document-preview').textContent = `Selected: ${result.path.split(/[/\\]/).pop()}`;
           toast('Document selected', 'ok');
         }
       } catch (e) {
@@ -33005,7 +33005,7 @@
           const result = await window.api.config.getDataDirectory();
           if (result.success) {
             // Send to main process to open folder
-            window.api.send('system:openFolder', { path: result.dataDirectory });
+            window.api.system.openFolder(result.dataDirectory);
             toast('Opening storage folder...');
           } else {
             toast('Failed to get storage location', 'error');
@@ -36485,9 +36485,9 @@
       function completeSetup() {
         showLoadingUI();
         setTimeout(() => {
-          // Send setup complete signal to main process
-          if (window.api && window.api.send) {
-            window.api.send('setup:complete', {});
+          // Notify main process that setup is complete
+          if (window.api && window.api.setup) {
+            window.api.setup.complete();
           }
           // Give main process time to handle transition
           setTimeout(() => {
@@ -36499,8 +36499,8 @@
     })();
 
     // Listen for setup:show signal from main process
-    if (window.api && window.api.receive) {
-      window.api.receive('setup:show', () => {
+    if (window.api && window.api.setup) {
+      window.api.setup.onShow(() => {
         const setupModal = document.getElementById('setup-modal');
         if (setupModal) {
           setupModal.style.display = 'flex';
