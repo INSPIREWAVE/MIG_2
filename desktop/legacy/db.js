@@ -2997,7 +2997,7 @@ module.exports = {
       try {
         const files = fs.readdirSync(backupDir)
           .filter(f => f.startsWith('backup_') && f.endsWith('.db'))
-          .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtime }))
+          .map(f => { const p = path.join(backupDir, f); return { name: f, path: p, time: fs.statSync(p).mtime }; })
           .sort((a, b) => b.time - a.time);
         files.slice(BACKUP_RETENTION).forEach(f => { try { fs.unlinkSync(f.path); } catch (e) {} });
       } catch (e) { /* non-critical */ }

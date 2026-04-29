@@ -287,7 +287,7 @@ async function handleVersionReset() {
     if (storedVersion !== APP_VERSION) {
       // Version changed: record the new version. Schema migrations run automatically
       // in db.initDB() via ensureColumn. User data is NEVER automatically deleted.
-      console.log(`[MAIN] App version changed: ${storedVersion} → ${APP_VERSION}. Updating version record.`);
+      console.log(`[MAIN] App version changed: ${storedVersion} -> ${APP_VERSION}. Updating version record.`);
       db.setSetting('app_version', APP_VERSION);
       db.logAudit('VERSION_UPGRADE', 'system', 0, storedVersion, APP_VERSION);
     }
